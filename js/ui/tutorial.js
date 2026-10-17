@@ -30,7 +30,11 @@ export class Tutorial {
       if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '손가락으로 은박을 문질러 긁어요!', sub: '같은 금액 3개가 나오면 당첨', finger: true };
       return null;
     }
-    if (s.tut === 3 && tab === 'shop' && shop.phase !== 'scratch') return { target: '.tab[data-tab="upgrade"]', text: '강화 탭이 열렸어요!', sub: '승진하면 알바 수입이 늘어나요' };
+    if (s.tut === 3 && tab === 'shop' && shop.phase !== 'scratch') {
+      // 강화 탭 안내는 잠깐만 보여주고 스스로 사라진다(플레이를 가리지 않게)
+      if (!this.t3) this.t3 = setTimeout(() => game.setTut(4), 7000);
+      return { target: '.tab[data-tab="upgrade"]', text: '강화 탭이 열렸어요!', sub: '승진하면 알바 수입이 늘어나요' };
+    }
     return null;
   }
 

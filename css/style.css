@@ -362,6 +362,12 @@ h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text-wra
   box-shadow: 0 0 0 .18em var(--gold), 0 10px 30px rgba(0, 0, 0, .35); transform: rotate(-3deg); animation: winstamp .45s cubic-bezier(.2, 1.5, .4, 1);
 }
 @keyframes winstamp { from { transform: rotate(-3deg) scale(.4); opacity: 0; } }
+/* 결과 도장은 잠깐 가운데 크게 보였다가 아래로 내려가 판을 가리지 않는다 */
+.t-result .stamp { animation-fill-mode: both; }
+.t-result .stamp.win { animation: winstamp .45s cubic-bezier(.2, 1.5, .4, 1), settle .35s 1.3s ease-in-out forwards; }
+.t-result .stamp.lose { animation: stamp .3s cubic-bezier(.2, 1.4, .4, 1), settle .35s 1.1s ease-in-out forwards; }
+.t-result .res-note { animation: fadeup .4s .15s both, settle .35s 1.1s ease-in-out forwards; }
+@keyframes settle { to { transform: translateY(calc(var(--tw) * .2)) scale(.72) rotate(-3deg); opacity: .96; } }
 .stamp-label { font-family: var(--font-display); font-size: .9em; color: var(--band); }
 .stamp-amt { font-family: var(--font-num); font-weight: 400; font-size: 1.75em; color: #c43b00; line-height: 1.05; white-space: nowrap; }
 .stamp-why { font-size: .72em; font-weight: 700; opacity: .7; }
