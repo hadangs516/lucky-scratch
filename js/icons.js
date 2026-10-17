@@ -5,7 +5,7 @@ const svg = (body, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 48 48" aria
 export const TIER_COLORS = ['#c58b52', '#b9c3cc', '#f2c14e', '#62d2a2', '#5aa9ff', '#ff6fb1', '#ff5a36'];
 
 export function coin(color = '#f2c14e', label = '') {
-  return svg(`<circle cx="24" cy="24" r="20" fill="${color}"/><circle cx="24" cy="24" r="20" fill="url(#coinShade)" opacity=".0"/>
+  return svg(`<circle cx="24" cy="24" r="20" fill="${color}"/>
   <circle cx="24" cy="24" r="15.5" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="2.5"/>
   <path d="M14 17a14 14 0 0 1 12-7" stroke="rgba(255,255,255,.55)" stroke-width="3" fill="none" stroke-linecap="round"/>
   ${label ? `<text x="24" y="29.5" text-anchor="middle" font-size="15" font-weight="900" fill="rgba(0,0,0,.45)" font-family="sans-serif">${label}</text>` : ''}`);
