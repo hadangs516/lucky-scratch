@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>럭키 스크래치</title>
+  <meta name="description" content="편의점 알바로 모은 돈으로 즉석 복권을 긁는 모바일 웹게임. 가상 화폐만 사용해요.">
+  <meta name="theme-color" content="#1d120c">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="럭키 스크래치">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="럭키 스크래치">
+  <meta property="og:title" content="럭키 스크래치 - 긁는 순간 인생역전">
+  <meta property="og:description" content="알바로 모은 돈으로 복권을 긁어 보세요. 설치 없이 바로 플레이! (가상 화폐 게임)">
+  <meta property="og:url" content="https://hadangs516.github.io/lucky-scratch/">
+  <meta property="og:image" content="https://hadangs516.github.io/lucky-scratch/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <section id="auth" class="screen" hidden></section>
+    <section id="game" class="screen" hidden></section>
+    <div id="boot" class="boot"><div class="spinner" aria-hidden="true"></div><p>럭키 스크래치 여는 중…</p></div>
+  </div>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="modal-root"></div>
+  <noscript><p class="noscript">이 게임은 자바스크립트가 필요해요. 브라우저 설정에서 켜 주세요.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
