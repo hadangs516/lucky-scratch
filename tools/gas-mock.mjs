@@ -47,12 +47,16 @@ class MockSheet {
     for (const [k, x] of this.cells) if (x.v !== '' && x.v != null) m = Math.max(m, Number(k.split(',')[1]));
     return m;
   }
+  insertRowsAfter(after, n) { this.maxRows += n; }
   setFrozenRows(n) { this.frozenRows = n; }
   setFrozenColumns() {}
   setColumnWidth() {}
   setRowHeight() {}
   getBandings() { return this.bandings; }
-  getRange(r, c, nr = 1, nc = 1) { return chainable(new MockRange(this, r, c, nr, nc)); }
+  getRange(r, c, nr = 1, nc = 1) {
+    if (r + nr - 1 > this.maxRows) throw new Error('범위의 좌표가 시트 크기를 벗어났습니다.'); // 실제 시트와 같은 동작
+    return chainable(new MockRange(this, r, c, nr, nc));
+  }
   // 테스트 편의: 행 전체 값
   row(r, n = 14) { return Array.from({ length: n }, (_, i) => this.cell(r, i + 1).v); }
 }

@@ -97,9 +97,10 @@ try {
     game.s.stage = 0;
     game.s.peak = 1.2e9;
     game.s.money = 1.2e9;
-    window.__app.views.prestige.render();
   });
-  await wait(200);
+  await page.click('.tab[data-tab="shop"]');
+  await page.click('.tab[data-tab="prestige"]');
+  await wait(300);
   await shot('v-prestige-stage0');
   await page.click('.tab[data-tab="shop"]');
   await wait(300);

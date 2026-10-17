@@ -71,6 +71,11 @@ function signup_(sheet, req) {
   var sid = Utilities.getUuid();
   var now = new Date();
   var row = sheet.getLastRow() + 1;
+  if (row > sheet.getMaxRows()) {
+    // 기본 1,000행을 넘으면 행을 늘리고 같은 서식을 적용한다
+    sheet.insertRowsAfter(sheet.getMaxRows(), 200);
+    setupSheet_(sheet);
+  }
   // 비밀번호 칸을 먼저 텍스트 서식으로 바꿔야 0으로 시작하는 숫자가 보존된다(0516 → 516 방지).
   sheet.getRange(row, COL.pw).setNumberFormat('@');
   sheet.getRange(row, 1, 1, HEADERS.length).setValues([[
@@ -242,7 +247,7 @@ function cleanId_(v) {
 
 var UNITS = ['', '만', '억', '조', '경', '해', '자', '양', '구', '간', '정', '재', '극', '항하사', '아승기', '나유타', '불가사의', '무량대수'];
 
-/** 1234567890 → "12억 3,457만 원" (큰 단위 2개까지) */
+/** 1234567890 → "12억 3,456만 원" (큰 단위 2개까지, 나머지는 버림) */
 function wonText_(value) {
   var n = Math.floor(Math.max(0, Number(value) || 0));
   if (n < 10000) return comma_(n) + '원';

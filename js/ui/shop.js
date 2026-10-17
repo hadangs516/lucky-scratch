@@ -93,9 +93,12 @@ export class ShopView {
   // 복권 크기를 무대에 맞춘다
   fit() {
     const r = this.deck.getBoundingClientRect();
-    if (!r.width || !r.height) return;
-    const tw = Math.floor(Math.min(r.width - 28, (r.height - 6) / 0.86, 440));
-    this.deck.style.setProperty('--tw', Math.max(220, tw) + 'px');
+    if (!r.width || !r.height) return; // 다른 탭에 가려진 동안은 건드리지 않는다
+    const tw = Math.max(220, Math.floor(Math.min(r.width - 28, (r.height - 6) / 0.86, 440)));
+    if (tw === this.tw) return;
+    this.tw = tw;
+    this.deck.style.setProperty('--tw', tw + 'px');
+    // 크기가 실제로 바뀐 경우에만 은박을 다시 깐다(긁던 진행은 처음부터)
     if (this.cur?.scratcher && !this.cur.scratcher.done) {
       clearTimeout(this.relayout);
       this.relayout = setTimeout(() => this.cur?.scratcher && !this.cur.scratcher.done && this.cur.scratcher.layout(), 120);
@@ -418,7 +421,7 @@ export class ShopView {
     if (r.it.m > 0) {
       fx.floatText(x, y + 10, `+${shortWon(r.total)}`, 'plus small c-' + r.cls);
       if (r.cls === 'big' || r.cls === 'mega') celebrate(r);
-      else if (r.cls === 'mid') { sfx.mid(); fx.coins(x, y, 10, 0.7); } else sfx.even();
+      else if (r.cls === 'mid') { sfx.mid(); fx.coins(x, y, 10, 0.7); }
     }
   }
 
