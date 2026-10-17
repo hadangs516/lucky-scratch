@@ -5,6 +5,6 @@
   "scripts": {
     "sim": "node tools/simulate.mjs",
     "ev": "node tools/ev-report.mjs",
-    "test": "node --test tests/"
+    "test": "node --test tests/*.test.mjs"
   }
 }
