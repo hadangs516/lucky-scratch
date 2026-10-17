@@ -4,6 +4,7 @@
 //
 // 사용법: node tools/simulate.mjs [시드 개수=200] [--verbose]
 import * as E from '../js/economy.js';
+import { makeCard, cardAmount } from '../js/cards.js';
 
 const args = process.argv.slice(2);
 const SEEDS = Number(args.find((a) => /^\d+$/.test(a)) ?? 200);
@@ -38,7 +39,7 @@ function manualTime(toolLevel, p) {
 }
 function celebrateTime(mult) {
   const c = E.tierClass(mult);
-  return { lose: 0, even: 0.3, small: 0.6, mid: 1.5, big: 3, mega: 4.5 }[c];
+  return { trap: 0.4, lose: 0, bit: 0.2, even: 0.3, small: 0.6, mid: 1.5, big: 3, mega: 4.5 }[c];
 }
 
 function newLife(perks, stage) {
@@ -59,6 +60,7 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
   let clovers = 0;
   const lives = [];
   let totalTime = 0;
+  let lifeClovers = 0;
   let forcedAt = E.FORCED_WIN.minSec + rng() * (E.FORCED_WIN.maxSec - E.FORCED_WIN.minSec);
   let forcedDone = false;
   const maxLives = opts.maxLives ?? 6;
@@ -82,18 +84,20 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
 
     const resolve = (id, who) => {
       const tk = E.TICKET_BY_ID[id];
-      let m = E.drawTier(tk, rng, L.luck);
-      const golden = rng() < gChance;
+      const item = { t: id, s: Math.floor(rng() * 4294967296), l: L.luck, g: rng() < gChance, n: rng() < E.NEAR_MISS_EXTRA, k: L.stake };
       if (!forcedDone && stage === 0 && totalTime + t >= forcedAt) {
-        m = E.forcedTierMult(tk); forcedDone = true; log.events.push([t, `강제 당첨 ${tk.name} ${m}배`]);
+        item.f = 1; forcedDone = true;
       }
-      if (m >= 20 && stage === 0) forcedDone = true;
-      const pay = m > 0 ? E.payout(tk, m, golden, bonus(), L.stake).total : 0;
-      L.money += pay;
+      const card = makeCard(tk, item);
+      if (item.f) log.events.push([t, `보장 당첨 ${tk.name} ${card.m}배`]);
+      if (card.m >= 15 && stage === 0) forcedDone = true;
+      const pay = cardAmount(tk, card, null, item, bonus()).amount;
+      L.money = Math.max(0, L.money + pay);
+      lifeClovers += card.clovers;
       log.ticketNet += pay;
       log.tickets++;
-      if (m >= 20) log.bigWins++;
-      return who === 'human' ? celebrateTime(m) : 0;
+      if (card.m >= 15) log.bigWins++;
+      return who === 'human' ? celebrateTime(card.m) : 0;
     };
 
     const buyUpgrades = () => {
@@ -185,7 +189,9 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
     if (stage < E.PRESTIGE.maxStage) {
       const got = E.cloversFor(L.peak, stage);
       log.clovers = got;
-      clovers += got;
+      log.cellClovers = lifeClovers;
+      clovers += got + lifeClovers;
+      lifeClovers = 0;
       // 클로버 소비: 싼 것부터
       for (let guard = 0; guard < 200; guard++) {
         const opts2 = E.PERKS.filter((x) => perks[x.id] < x.max).map((x) => ({ x, c: x.cost(perks[x.id]) })).filter((o) => o.c <= clovers);
@@ -226,7 +232,7 @@ export function runReport(n = SEEDS, player = DEFAULT_PLAYER, label = '기본 �
   out.push(`- 첫 복권까지 탭 수: 중앙값 ${pct(ft, 0.5).toFixed(0)}회 (범위 ${Math.min(...ft).toFixed(0)}~${Math.max(...ft).toFixed(0)})`);
   // 1회차 이벤트 시점 중앙값
   const evTimes = {};
-  for (const r of runs) for (const [t, e] of r[0].events) { const k = e.replace(/ \d+배$/, '').replace(/^강제 당첨 .*/, '보장 당첨'); (evTimes[k] ??= []).push(t); }
+  for (const r of runs) for (const [t, e] of r[0].events) { const k = e.replace(/^보장 당첨 .*/, '보장 당첨'); (evTimes[k] ??= []).push(t); }
   out.push(`- 1회차 주요 사건 시점(중앙값, 분): ` + Object.entries(evTimes).map(([k, v]) => `${k} ${mins(pct(v, 0.5))}`).join(', '));
   const inf = runs.map((r) => r.at(-1));
   out.push(`- 무한 모드 1시간 뒤 판돈 단계(중앙값): ${pct(inf.map((x) => x.final.stake), 0.5)}, 보유액 중앙값 ${E.roundNice(pct(inf.map((x) => x.final.money), 0.5)).toExponential(2)}원`);
@@ -242,7 +248,7 @@ if (import.meta.url === `file://${process.argv[1]}` && args.includes('--life1'))
   const runs = [];
   for (let i = 0; i < SEEDS; i++) runs.push(simulateRun(1000 + i, DEFAULT_PLAYER, { maxLives: 1 })[0]);
   const ev = {};
-  for (const r of runs) for (const [t, e] of r.events) { const k = e.replace(/ \d+배$/, '').replace(/^강제 당첨 .*/, '보장'); (ev[k] ??= []).push(t); }
+  for (const r of runs) for (const [t, e] of r.events) { const k = e.replace(/^보장 당첨 .*/, '보장'); (ev[k] ??= []).push(t); }
   console.log('life1 time P10/50/90', [0.1, 0.5, 0.9].map((q) => mins(pct(runs.map((r) => r.time), q))).join(' / '), 'tapShare', (pct(runs.map((r) => r.tapIncome / (r.tapIncome + Math.max(1, r.ticketNet))), 0.5) * 100).toFixed(0) + '%', 'firstTaps', pct(runs.map((r) => r.firstTicketTaps), 0.5));
   console.log(Object.entries(ev).map(([k, v]) => `${k}:${mins(pct(v, 0.5))}`).join('  '));
   console.log('final', JSON.stringify(runs[0].final));

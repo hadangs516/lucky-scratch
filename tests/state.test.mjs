@@ -31,7 +31,7 @@ test('구매하면 돈이 빠지고 결과가 확정된 복권이 쌓인다', ()
   assert.equal(items.length, 1);
   assert.equal(g.s.money, before - 1000);
   assert.equal(g.s.stack.length, 1);
-  assert.ok(Number.isFinite(items[0].m));
+  assert.ok(Number.isFinite(items[0].s));
   assert.equal(g.buy('t2', 1).length, 0, '잠긴 복권은 못 산다');
   const it = g.nextActive();
   const r = g.completeActive();
@@ -39,43 +39,73 @@ test('구매하면 돈이 빠지고 결과가 확정된 복권이 쌓인다', ()
   assert.equal(g.s.stats.tickets, 1);
 });
 
-test('당첨금 = 가격 × 배수 × 황금 × (1+보너스)', () => {
-  const t = E.TICKET_BY_ID.t3;
-  assert.deepEqual(E.payout(t, 5, false, 0), { base: 200000, extra: 0, total: 200000 });
-  assert.deepEqual(E.payout(t, 5, true, 0.1), { base: 400000, extra: 40000, total: 440000 });
-  assert.equal(E.payout(t, 2, false, 0, 2).base, 40000 * 100 * 2);
+test('칸을 열 때마다 바로 정산되고, 끝까지 열면 전체 금액과 같다', () => {
+  for (let k = 0; k < 30; k++) {
+    const g = new Game(defaultState(), mulberry32(100 + k));
+    g.s.money = 1e7;
+    g.s.life.unlocked = ['t1', 't2', 't3', 't4'];
+    g.buy('t4', 1);
+    const a = g.nextActive();
+    const card = g.cardOf(a);
+    const before = g.s.money;
+    let sum = 0;
+    for (const c of card.cells) sum += g.revealCell(c.i).delta;
+    assert.equal(g.revealCell(0), null, '이미 연 칸은 다시 정산하지 않는다');
+    const r = g.completeActive();
+    assert.equal(r.total, sum);
+    assert.equal(g.s.money, before + sum);
+  }
 });
 
-test('보장 당첨: 10~30분 사이 설정, 그 뒤 첫 구매가 대박', () => {
-  const g = new Game(defaultState(), () => 0.999999); // 확률상 항상 꽝이 나오게
+test('버리기: 안 연 칸(함정 포함)은 정산하지 않는다', () => {
+  const g = new Game(defaultState(), mulberry32(5));
+  g.s.money = 1e8;
+  g.s.life.unlocked = ['t1', 't2', 't3', 't4'];
+  for (let k = 0; k < 200; k++) {
+    g.buy('t4', 1);
+    const a = g.nextActive();
+    const card = g.cardOf(a);
+    const trapAt = card.cells.findIndex((c) => c.sym.kind === 'trap');
+    if (trapAt < 0) { g.completeActive(); continue; }
+    const safe = card.cells.filter((c) => c.sym.kind !== 'trap').map((c) => c.i);
+    for (const i of safe) g.revealCell(i);
+    const r = g.completeActive(true);
+    assert.equal(r.discard, true);
+    assert.ok(r.ev.traps === 0, '함정을 열지 않았으니 벌금 없음');
+    assert.equal(g.s.stats.discards, 1);
+    return;
+  }
+  assert.fail('함정 판을 찾지 못함');
+});
+
+test('보장 당첨: 10~30분 사이 설정, 그 뒤 첫 구매가 15~25배', () => {
+  const g = new Game(defaultState(), mulberry32(9));
   assert.ok(g.s.forced.at >= 600 && g.s.forced.at <= 1800);
   g.s.money = 1e6;
-  assert.equal(g.makeOutcome('t1').m, 0);
+  g.s.forced.done = false;
   g.s.playSec = g.s.forced.at + 1;
   const it = g.makeOutcome('t1');
-  assert.equal(it.m, E.forcedTierMult(E.TICKET_BY_ID.t1));
   assert.equal(it.f, 1);
-  assert.equal(g.makeOutcome('t1').m, 0, '두 번째부터는 확률대로');
+  const m = g.cardOf(it).m;
+  assert.ok(m >= 15 && m <= 25, `${m}`);
+  assert.equal(g.makeOutcome('t1').f, undefined, '두 번째부터는 확률대로');
 });
 
-test('자연 대박이 먼저 나오면 보장은 생략', () => {
-  const g = new Game(defaultState(), () => 0.9999999);
-  g.s.life.luck = 0;
-  // 20배가 나오도록 rng 조작: drawTier가 20배 구간을 고르게
-  const t = E.TICKET_BY_ID.t1;
-  const before20 = t.tiers.slice(0, 5).reduce((s, [, w]) => s + w, 0);
-  g.rng = () => (before20 + 10) / E.WEIGHT_TOTAL;
-  assert.equal(g.makeOutcome('t1').m, 20);
-  assert.equal(g.s.forced.done, true);
+test('행운 부적: 꽝·함정 칸 가중치를 줄이고(15레벨 상한) 그 뒤엔 당첨금 보너스', () => {
+  const t = E.TICKET_BY_ID.t4;
+  const w = (lv) => E.cellWeights(t, lv);
+  assert.ok(w(10)[0].w < w(0)[0].w);
+  assert.equal(w(15)[0].w, w(30)[0].w);
+  assert.ok(E.prizeBonus(16, 0) > E.prizeBonus(15, 0));
 });
 
-test('행운 부적은 당첨률을 올린다(분산은 거의 그대로)', () => {
-  const t = E.TICKET_BY_ID.t3;
-  const hit = (lv) => E.effectiveTiers(t, lv).reduce((s, [, w]) => s + w, 0) / E.WEIGHT_TOTAL;
-  assert.ok(Math.abs(hit(0) - 0.46) < 1e-6);
-  assert.ok(Math.abs(hit(10) - 0.66) < 1e-6);
-  assert.ok(Math.abs(hit(15) - hit(30)) < 1e-9, '16레벨부터는 확률 고정');
-  assert.ok(E.effectiveRtp(t, 16, 0, 0) > E.effectiveRtp(t, 15, 0, 0), '16레벨부터는 당첨금 보너스');
+test('이전 저장 형식(v1, 결과 배수 저장)도 불러온다', () => {
+  const m = migrate({ v: 1, stack: [{ t: 't2', m: 5, g: false, n: false, s: 777, k: 0 }], active: { t: 't1', m: 0, s: 3, k: 0 } });
+  assert.equal(m.stack.length, 1);
+  assert.equal(m.stack[0].l, 0);
+  assert.deepEqual(m.active.rv, []);
+  const g = new Game(m, mulberry32(1));
+  assert.ok(g.cardOf(g.s.stack[0]).cells.length === E.TICKET_BY_ID.t2.cells);
 });
 
 test('도우미는 쌓인 복권을 뒤에서 가져가 긁는다', () => {
@@ -90,6 +120,7 @@ test('도우미는 쌓인 복권을 뒤에서 가져가 긁는다', () => {
   const res = g.helperTick(g.helperTime());
   assert.equal(res.length, 1);
   assert.equal(res[0].source, 'helper');
+  assert.equal(res[0].total, g.cardOf(res[0].it) && res[0].total);
 });
 
 test('환생: 목표 달성 + 남은 복권 없음일 때만, 클로버 지급, 강화 초기화', () => {
@@ -124,7 +155,7 @@ test('저장·복원과 이상한 값 정리', () => {
   g.s.money = 12345;
   const back = new Game(JSON.parse(g.serialize()));
   assert.equal(back.s.money, 12345);
-  const m = migrate({ money: 'abc', stage: 99, life: { tool: 999, unlocked: ['t1', 'zzz'] }, stack: [{ t: 'nope' }, { t: 't1', m: 0, s: 1 }] });
+  const m = migrate({ money: 'abc', stage: 99, life: { tool: 999, unlocked: ['t1', 'zzz'] }, stack: [{ t: 'nope' }, { t: 't1', s: 1 }] });
   assert.equal(m.money, 0);
   assert.equal(m.stage, 5);
   assert.equal(m.life.tool, E.TOOL_MAX_LEVEL);
@@ -145,7 +176,7 @@ test('업적이 조건에 맞게 달성된다', () => {
   const g = new Game(defaultState(), mulberry32(8));
   const got = [];
   g.on('ach', (a) => got.push(a.id));
-  g.s.money = 1e6;
+  g.addMoney(1e6);
   g.buy('t1', 1);
   g.nextActive();
   g.completeActive();
