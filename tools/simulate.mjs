@@ -105,7 +105,7 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
         if (L.tool < E.TOOL_MAX_LEVEL) c.push({ cost: E.toolCost(L.tool), go: () => L.tool++ });
         c.push({ cost: E.luckCost(L.luck), go: () => L.luck++ });
         if (L.helpers < E.HELPER.hireCosts.length) c.push({ cost: E.HELPER.hireCosts[L.helpers], go: () => { L.helpers++; helperTimers.push(0); } });
-        if (L.helpers > 0) c.push({ cost: E.helperSpeedCost(L.helperSpeed), go: () => L.helperSpeed++ });
+        if (L.helpers > 0 && L.helperSpeed < E.HELPER.maxSpeedLevel) c.push({ cost: E.helperSpeedCost(L.helperSpeed), go: () => L.helperSpeed++ });
         if (L.bulk < E.BULK.length - 1) c.push({ cost: E.BULK[L.bulk + 1].cost, go: () => L.bulk++ });
         if (stage >= E.PRESTIGE.maxStage && L.unlocked.size === E.TICKETS.length) c.push({ cost: E.stakeCost(L.stake), go: () => { L.stake++; log.events.push([t, `판돈 ${L.stake}단계`]); } });
         // 목표 지향: 다음 해금 비용의 saveFrom 이상 모았으면 해금 비용의 5% 이하 업그레이드만 산다

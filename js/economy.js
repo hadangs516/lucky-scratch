@@ -222,6 +222,7 @@ export const HELPER = {
   minTime: 5,
   speedCostBase: 25_000,
   speedCostGrowth: 2.4,
+  maxSpeedLevel: 8, // 8레벨이면 최소 시간(5초)에 도달
 };
 export function helperTime(speedLevel, perkLevel = 0) {
   return Math.max(HELPER.minTime * 0.9 ** perkLevel, HELPER.baseTime * HELPER.speedGrowth ** speedLevel * 0.9 ** perkLevel);
