@@ -1,0 +1,10 @@
+{
+  "name": "lucky-scratch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sim": "node tools/simulate.mjs",
+    "ev": "node tools/ev-report.mjs",
+    "test": "node --test tests/"
+  }
+}
