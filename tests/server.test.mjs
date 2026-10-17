@@ -117,3 +117,13 @@ test('금액 표기: 한국식 단위 2개까지', () => {
   assert.equal(w(-5), '0원');
   assert.equal(w('abc'), '0원');
 });
+
+test('시트 최대 행 수를 넘으면 행을 늘려서 가입을 받는다', () => {
+  const env = createGasEnv();
+  env.post({ a: 'signup', id: '첫번째', pw: '1234' });
+  env.sheet().maxRows = 2;
+  const r = env.post({ a: 'signup', id: '두번째', pw: '0001' });
+  assert.equal(r.ok, true);
+  assert.ok(env.sheet().maxRows > 2);
+  assert.strictEqual(env.sheet().cell(3, 2).v, '0001');
+});

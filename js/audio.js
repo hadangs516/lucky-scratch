@@ -89,7 +89,7 @@ function noise({ dur = 0.1, vol = 0.2, at = 0, freq = 2000, q = 1, type = 'bandp
 const NOTE = (n) => 440 * 2 ** ((n - 69) / 12);
 
 export const sfx = {
-  tap(level = 0) { tone(1700 + level * 140, { type: 'square', dur: 0.045, vol: 0.06 }); },
+  tap(level = 0) { tone(2300 + level * 160, { type: 'sine', dur: 0.05, vol: 0.07 }); },
   comboUp(level) { [0, 4, 7].forEach((s, i) => tone(NOTE(72 + level * 2 + s), { type: 'triangle', dur: 0.12, vol: 0.12, at: i * 0.05 })); },
   click() { tone(900, { type: 'triangle', dur: 0.05, vol: 0.08 }); },
   buy() {
