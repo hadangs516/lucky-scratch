@@ -154,13 +154,16 @@ export class Game {
     this.combo.count = this.comboNow(nowMs) + 1;
     this.combo.last = nowMs;
     const tier = E.comboTier(this.combo.count);
-    const value = this.tapValue(tier.mult);
+    // 가끔 단골손님이 팁을 준다(첫 복권을 긁은 뒤부터, 탭 수입 ×10)
+    const tip = this.s.tut >= 3 && this.rng() < E.JOB.tipChance;
+    const value = this.tapValue(tier.mult) * (tip ? E.JOB.tipMult : 1);
+    if (tip) this.s.stats.tips++;
     this.s.stats.taps++;
     this.s.stats.tapIncome += value;
     if (this.combo.count > this.s.stats.maxCombo) this.s.stats.maxCombo = this.combo.count;
     this.addMoney(value);
     if (this.s.tut === 0 && this.s.money >= this.price('t1')) this.setTut(1);
-    return { value, combo: this.combo.count, tier, tierUp: tier.at > before.at };
+    return { value, combo: this.combo.count, tier, tierUp: tier.at > before.at, tip };
   }
 
   // ───────── 구매 ─────────
@@ -282,7 +285,7 @@ export class Game {
       s.life.earned += total;
     }
     if (total > st.best) { st.best = total; st.bestName = t.name; st.bestMult = m; }
-    const near = card.near && m < 1 && !discard;
+    const near = card.near && !discard;
     if (near) st.near++;
     const result = { it, ticket: t, source, cls, m, total, near, discard, card, ev: fin.ev, price: E.ticketPrice(t, it.k || 0) };
     if (s.tut === 2 && source === 'me') this.setTut(3);

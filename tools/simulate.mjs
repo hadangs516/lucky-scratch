@@ -219,7 +219,7 @@ export function runReport(n = SEEDS, player = DEFAULT_PLAYER, label = '기본 �
   const out = [];
   out.push(`## ${label} (시드 ${n}개, 초당 ${player.tapRate}탭, 베팅 비율 ${player.betFrac})`);
   out.push('');
-  out.push('| 회차 | 소요 시간 P10 / 중앙값 / P90 (분) | 탭 수입 비중 | 긁은 복권(중앙값) | 20배 이상 당첨(중앙값) | 파산 경험 비율 | 클로버(중앙값) |');
+  out.push('| 회차 | 소요 시간 P10 / 중앙값 / P90 (분) | 탭 수입 비중 | 긁은 복권(중앙값) | 15배 이상 당첨(중앙값) | 파산 경험 비율 | 클로버(중앙값) |');
   out.push('|---|---|---|---|---|---|---|');
   for (let s = 0; s < runs[0].length; s++) {
     const L = runs.map((r) => r[s]);

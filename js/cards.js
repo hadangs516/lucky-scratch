@@ -48,7 +48,7 @@ export function makeCard(ticket, item) {
   return {
     cells: syms.map((sym, i) => ({ i, sym })),
     m: full.m, // 전부 열었을 때의 배수(황금 포함, 행운 보너스 제외)
-    near: isNear(ticket, syms, full),
+    near: isNear(ticket, syms),
     clovers: full.clovers,
     traps: full.traps,
   };
@@ -70,10 +70,10 @@ function nearInject(ticket, syms, r) {
   }
 }
 
-function isNear(ticket, syms, full) {
+// 보너스 그림이 딱 하나 모자란 판(아깝다!)
+function isNear(ticket, syms) {
   if (!ticket.match) return false;
-  const c = syms.filter((s) => s.id === ticket.match.sym).length;
-  return c === ticket.match.need - 1 && full.m < 1;
+  return syms.filter((s) => s.id === ticket.match.sym).length === ticket.match.need - 1;
 }
 
 // revealed: 공개된 칸 번호 집합(null이면 전부). 반환 배수는 가격 대비.

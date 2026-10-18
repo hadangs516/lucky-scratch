@@ -138,6 +138,28 @@ export const sfx = {
     [96, 100, 103, 108, 103, 108].forEach((n, i) => tone(NOTE(n), { type: 'sine', dur: 0.25, vol: 0.09, at: 1.75 + i * 0.09 }));
     coinsSound(24, 1.2);
   },
+  // 칸에서 돈이 나올 때: 한 장 안에서 연달아 나올수록 음이 올라간다
+  coin(step = 1, tn = 0) {
+    const n = 76 + Math.min(14, step * 2) + tn;
+    tone(NOTE(n), { type: 'triangle', dur: 0.09, vol: 0.13 });
+    tone(NOTE(n + 7), { type: 'sine', dur: 0.12, vol: 0.08, at: 0.04 });
+    if (tn >= 4) coinsSound(3, 0.15);
+  },
+  blank() { tone(320, { type: 'sine', dur: 0.06, vol: 0.06, slide: 0.8 }); },
+  mult(k = 2) {
+    [60, 64, 67, 72, 76].slice(0, 2 + Math.min(3, k)).forEach((n, i) => tone(NOTE(n + 12), { type: 'sawtooth', dur: 0.16, vol: 0.05, at: i * 0.05 }));
+    noise({ dur: 0.25, vol: 0.12, freq: 1800, q: 0.6, type: 'highpass' });
+  },
+  trap() {
+    tone(110, { type: 'square', dur: 0.22, vol: 0.12, slide: 0.6 });
+    tone(92, { type: 'square', dur: 0.3, vol: 0.1, at: 0.12, slide: 0.6 });
+    noise({ dur: 0.15, vol: 0.2, freq: 400, q: 1 });
+  },
+  clover() { [84, 88, 91, 96, 100].forEach((n, i) => tone(NOTE(n), { type: 'sine', dur: 0.3, vol: 0.1, at: i * 0.06 })); },
+  bonus() {
+    [72, 76, 79, 84, 88, 91].forEach((n, i) => tone(NOTE(n), { type: 'triangle', dur: 0.25, vol: 0.15, at: i * 0.06 }));
+    coinsSound(12, 0.5);
+  },
   golden() { [79, 83, 86, 91].forEach((n, i) => tone(NOTE(n), { type: 'sine', dur: 0.5, vol: 0.12, at: i * 0.06 })); },
   unlock() { [67, 72, 76, 79, 84].forEach((n, i) => tone(NOTE(n), { type: 'triangle', dur: 0.3, vol: 0.15, at: i * 0.06 })); },
   levelup() { [76, 79, 84].forEach((n, i) => tone(NOTE(n), { type: 'triangle', dur: 0.16, vol: 0.14, at: i * 0.05 })); },

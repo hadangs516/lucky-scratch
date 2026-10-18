@@ -23,11 +23,11 @@ export class Tutorial {
     if (tab !== 'shop' && s.tut < 3) return null;
     if (s.tut === 0) return { target: '#job-btn', text: '알바 버튼을 연타해서 돈을 모아요!', sub: `1,000원이면 첫 복권을 살 수 있어요 · 지금 ${won(s.money)}` };
     if (s.tut === 1) {
-      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '손가락으로 은박을 문질러 긁어요!', sub: '같은 금액 3개가 나오면 당첨', finger: true };
+      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '손가락으로 은박을 문질러 긁어요!', sub: '칸을 열 때마다 바로 돈이 들어와요', finger: true };
       return { target: '#buy-btn', text: '1,000원이 모였어요! 첫 복권을 사 볼까요?', sub: '' };
     }
     if (s.tut === 2) {
-      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '손가락으로 은박을 문질러 긁어요!', sub: '같은 금액 3개가 나오면 당첨', finger: true };
+      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '손가락으로 은박을 문질러 긁어요!', sub: '칸을 열 때마다 바로 돈이 들어와요', finger: true };
       return null;
     }
     if (s.tut === 3 && tab === 'shop' && shop.phase !== 'scratch') {

@@ -135,6 +135,8 @@ export const JOB = {
   costBase: 150,
   costGrowth: 1.45,
   rankEvery: 3, // 3레벨마다 직급 승진(호칭 변경)
+  tipChance: 0.025, // 탭마다 단골손님 팁 확률
+  tipMult: 10,
 };
 export const JOB_RANKS = [
   '신입 알바', '주말 알바', '야간 알바', '베테랑 알바', '부매니저', '매니저',

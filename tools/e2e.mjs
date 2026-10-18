@@ -180,19 +180,32 @@ try {
   await page.click('.modal .btn-primary');
   assert.ok(await G(() => window.__app.game.isUnlocked('t3')));
   ok('복권 선택 줄에서 해금(네잎클로버, 럭키 세븐)');
-  await G(() => { const g = window.__app.game; g.s.money = 4e9; g.s.peak = 4e9; g.emit('money', g.s.money); });
+  await G(() => { const g = window.__app.game; g.s.money = 6e9; g.s.peak = 6e9; g.emit('money', g.s.money); });
   await page.click('.tab[data-tab="prestige"]');
   await wait(300);
   await shot('06-prestige-ready');
   await page.click('.pr-go');
   await page.click('.modal .btn-primary');
-  await wait(500);
-  assert.equal(await G(() => window.__app.game.s.stage), 1);
+  // 인생역전 복권을 손가락으로 긁는다
+  await page.waitForSelector('.rebirth .rb-play canvas');
+  await wait(300);
+  const rb = await page.locator('.rebirth .rb-play').boundingBox();
+  await page.mouse.move(rb.x + 4, rb.y + 4);
+  await page.mouse.down();
+  for (let y = rb.y + 4; y < rb.y + rb.height; y += 16) {
+    await page.mouse.move(rb.x + rb.width - 4, y, { steps: 4 });
+    await page.mouse.move(rb.x + 4, y + 8, { steps: 4 });
+  }
+  await page.mouse.up();
+  await wait(600);
+  await shot('06b-rebirth');
+  await page.waitForFunction(() => window.__app.game.s.stage === 1, null, { timeout: 5000 });
+  await page.waitForSelector('.rebirth', { state: 'detached', timeout: 6000 });
   assert.ok((await G(() => window.__app.game.s.clovers)) >= 10);
   await page.click('.perk[data-id="job"] .btn-clover');
   assert.equal(await G(() => window.__app.game.s.perks.job), 1);
   await shot('07-after-prestige');
-  ok('환생 → 클로버 지급 → 영구 강화 구매');
+  ok('환생 → 인생역전 복권 긁기 → 클로버 지급 → 영구 강화 구매');
 
   // 12. 도우미가 쌓인 복권을 긁는다
   await page.click('.tab[data-tab="shop"]');

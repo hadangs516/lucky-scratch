@@ -1,10 +1,9 @@
 // 복권방(홈) 화면: 복권대·복권 선택·구매·알바 버튼·도우미
 import * as E from '../economy.js';
-import { makeBoard, revealState, NEAR_TEXT, WIN_TEXT } from '../boards.js';
-import { renderTicket, THEMES, themeStyle } from '../ticketView.js';
+import { renderTicket, THEMES, themeStyle, symIcon, symLabel } from '../ticketView.js';
 import { Scratcher } from '../scratch.js';
 import { won, short, shortWon, pct, oneIn } from '../format.js';
-import { symbol, ui, tool as toolIcon } from '../icons.js';
+import { symbol, ui, tool as toolIcon, item as itemIcon } from '../icons.js';
 import { sfx, scratchStart, scratchSpeed, scratchStop } from '../audio.js';
 import { haptic } from '../haptics.js';
 import * as fx from '../fx.js';
@@ -219,14 +218,14 @@ export class ShopView {
     this.phase = 'idle';
     const t = E.TICKET_BY_ID[this.game.s.sel];
     const price = this.game.price(t.id);
-    const top = Math.max(...t.tiers.map(([m]) => m));
+    const match = t.syms.find((x) => x.id === t.match?.sym);
     this.deck.innerHTML = `
       <div class="ticket display" style="${themeStyle(t)}">
         <div class="t-top"><span class="t-badge">${symbol(THEMES[t.id].icon)}</span><span class="t-name">${t.name}</span><span class="t-price">${shortWon(price)}</span></div>
         <div class="display-body">
           <div class="display-ic">${symbol(THEMES[t.id].icon)}</div>
           <p class="display-rule">${t.blurb}</p>
-          <p class="display-top">최고 <b>${top}배</b> · ${shortWon(price * top)}</p>
+          <p class="display-top">칸 ${t.cells}개 · 최고 <b>${t.maxMult}배</b>${match ? ` · ${symIcon(match)}×${t.match.need} = +${shortWon(price * t.match.bonus)}` : ''}</p>
           <p class="display-cta">아래 버튼으로 사면 바로 긁을 수 있어요</p>
         </div>
       </div>`;
@@ -240,8 +239,8 @@ export class ShopView {
 
   mountActive(it, animate) {
     const ticket = E.TICKET_BY_ID[it.t];
-    const board = makeBoard(ticket, it);
-    const view = renderTicket(ticket, it, board);
+    const card = this.game.cardOf(it);
+    const view = renderTicket(ticket, it, card);
     if (animate) view.el.classList.add('deal');
     this.deck.innerHTML = '';
     // 뒤에 쌓인 복권 두께
@@ -254,9 +253,12 @@ export class ShopView {
     }
     this.deck.appendChild(view.el);
     this.phase = 'scratch';
-    const cur = { it, ticket, board, view, beat: false, foundShown: false };
+    const match = ticket.match ? ticket.match.sym : null;
+    const cur = { it, ticket, card, view, beat: false, ladder: 0, match, bonusShown: false };
     this.cur = cur;
+    this.setTotal(cur, it.paid || 0);
     if (it.g) setTimeout(() => fx.sparks(...centerOf(view.el), 24, '#ffe9a0'), 200);
+    if (view.discardBtn) onTap(view.discardBtn, () => this.discard(cur));
     // 레이아웃이 잡힌 뒤 은박을 덮는다
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (this.cur !== cur) return;
@@ -268,12 +270,29 @@ export class ShopView {
         onHover: (e) => this.toolHover(e),
         onLeave: () => { if (!cur.scratcher?.drawing) this.cursor.hidden = true; },
         onStroke: (p, v, e) => this.onStroke(cur, p, v, e),
-        onCell: (id, revealed, auto) => this.onCell(cur, id, revealed, auto),
+        onCell: (id, revealed, silent) => this.onCell(cur, id, silent),
         onDone: () => this.onDone(cur),
       });
+      // 이어하기: 이미 연 칸은 벗겨 둔다
+      if (it.rv?.length) {
+        cur.scratcher.restore(it.rv);
+        for (const i of it.rv) cur.view.cellEls.find((c) => c.id === i)?.el.classList.add('revealed');
+        if (it.rv.length >= ticket.cells) this.onDone(cur);
+      }
       this.app.tutorial?.update();
     }));
     this.renderStackBadge();
+  }
+
+  setTotal(cur, total) {
+    const el = cur.view.totalEl;
+    el.textContent = (total < 0 ? '−' : total > 0 ? '+' : '') + won(Math.abs(total));
+    el.parentElement.classList.toggle('neg', total < 0);
+    el.parentElement.classList.toggle('pos', total > 0);
+    el.parentElement.classList.toggle('over', total >= E.ticketPrice(cur.ticket, cur.it.k || 0));
+    el.parentElement.classList.remove('bump');
+    void el.offsetWidth;
+    el.parentElement.classList.add('bump');
   }
 
   toolDown(e) {
@@ -307,83 +326,131 @@ export class ShopView {
     if (cur.dist % 3 === 0) fx.flakes(e.clientX, e.clientY, cur.it.g, 2);
     if (v > 250) haptic.scratch();
   }
-  onCell(cur, id, revealed, auto) {
+
+  // 칸이 열리는 순간: 바로 정산하고 그 자리에서 터뜨린다
+  onCell(cur, id, silent) {
     if (this.cur !== cur) return;
-    const st = revealState(cur.ticket, cur.board, revealed);
-    for (const c of cur.view.cellEls) c.el.classList.toggle('glow', st.glow.includes(c.id));
-    if (!auto) {
-      sfx.reveal();
-      haptic.cell();
-      const cel = cur.view.cellEls.find((c) => c.id === id)?.el;
-      cel?.classList.add('pop');
+    const r = this.game.revealCell(id);
+    if (!r) return;
+    const cel = cur.view.cellEls.find((c) => c.id === id)?.el;
+    if (!cel) return;
+    cel.classList.add('pop');
+    this.setTotal(cur, r.total);
+    const [x, y] = centerOf(cel);
+    const sym = r.sym;
+    if (sym.kind === 'val') {
+      cur.ladder++;
+      sfx.coin(cur.ladder, sym.tone || 0);
+      if (r.delta > 0) fx.floatText(x, y - 6, `+${short(r.delta)}`, `cell t${sym.tone || 0}`);
+      if (sym.tone >= 5) { fx.sparks(x, y, 14, '#fff3b0'); fx.coins(x, y, 8, 0.7); haptic.small(); } else haptic.cell();
+      if (sym.v >= 5) { sfx.mid(); fx.shake(cur.view.el, 0.5); }
+    } else if (sym.kind === 'mult') {
+      sfx.mult(sym.k);
+      haptic.mid();
+      fx.floatText(x, y - 10, `전체 ×${sym.k}!`, 'cell mult');
+      if (r.delta > 0) setTimeout(() => fx.floatText(x, y + 12, `+${short(r.delta)}`, 'cell t5'), 250);
+      fx.sparks(x, y, 18, '#d9b3ff');
+      fx.shake(cur.view.el, 0.4);
+    } else if (sym.kind === 'trap') {
+      sfx.trap();
+      haptic.mid();
+      fx.floatText(x, y - 6, `−${short(-r.delta)}`, 'cell trap');
+      cur.view.el.classList.remove('hurt');
+      void cur.view.el.offsetWidth;
+      cur.view.el.classList.add('hurt');
+      fx.shake(cur.view.el, 0.7);
+    } else if (sym.kind === 'clover') {
+      sfx.clover();
+      haptic.small();
+      fx.floatText(x, y - 6, '황금 클로버 +1', 'cell clover');
+      fx.sparks(x, y, 20, '#ffe066');
+    } else {
+      sfx.blank();
     }
-    if (st.heartbeat && !st.found && !cur.beat && !auto) {
-      cur.beat = true;
-      sfx.heartbeat();
-      haptic.tension();
-      cur.view.el.classList.add('tense');
-    }
-    if (st.found && !cur.foundShown && !auto) {
-      cur.foundShown = true;
-      cur.view.el.classList.remove('tense');
-      for (const gid of st.glow) {
-        const el = cur.view.cellEls.find((c) => c.id === gid)?.el;
-        if (el) fx.sparks(...centerOf(el), 8);
+    // 보너스 그림 긴장감: 하나 남았을 때 심장박동, 다 모으면 보너스
+    if (cur.match) {
+      const need = cur.ticket.match.need;
+      const got = r.ev.matchCount;
+      const matchEls = cur.view.cellEls.filter((c) => c.el.classList.contains('revealed') && c.el.classList.contains('is-match'));
+      if (got >= need && !cur.bonusShown) {
+        cur.bonusShown = true;
+        cur.view.el.classList.remove('tense');
+        for (const m of matchEls) { m.el.classList.add('win'); fx.sparks(...centerOf(m.el), 10); }
+        const bonusAmt = Math.round(E.ticketPrice(cur.ticket, cur.it.k || 0) * cur.ticket.match.bonus * (cur.it.g ? E.GOLDEN.prizeMult : 1) * r.ev.multK * (1 + this.game.bonus()));
+        setTimeout(() => {
+          sfx.bonus();
+          haptic.big();
+          fx.floatText(...centerOf(cur.view.play), `보너스 +${short(bonusAmt)}!`, 'plus c-mid');
+          fx.coins(...centerOf(cur.view.play), 30, 1.1);
+        }, 120);
+      } else if (got === need - 1 && !cur.beat && cur.view.cellEls.some((c) => !c.el.classList.contains('revealed'))) {
+        cur.beat = true;
+        for (const m of matchEls) m.el.classList.add('glow');
+        sfx.heartbeat();
+        haptic.tension();
+        cur.view.el.classList.add('tense');
       }
     }
   }
   onDone(cur) {
-    if (this.cur !== cur) return;
+    if (this.cur !== cur || cur.doneCalled) return;
+    cur.doneCalled = true;
     scratchStop();
     this.cursor.hidden = true;
     cur.view.el.classList.remove('tense');
-    setTimeout(() => this.finish(cur), 380);
+    setTimeout(() => this.finish(cur, false), 420);
   }
 
-  async finish(cur) {
+  // 함정이 무서우면 중간에 버린다: 안 연 칸은 정산하지 않는다
+  discard(cur) {
+    if (this.cur !== cur || cur.finished || !cur.scratcher || cur.scratcher.done) return;
+    sfx.click();
+    cur.scratcher.stop();
+    scratchStop();
+    this.cursor.hidden = true;
+    for (const c of cur.view.cellEls) if (!c.el.classList.contains('revealed')) c.el.classList.add('missed');
+    this.finish(cur, true);
+  }
+
+  async finish(cur, discard) {
     if (this.cur !== cur || cur.finished) return;
     cur.finished = true;
-    const r = this.game.completeActive();
+    const r = this.game.completeActive(discard);
     if (!r) return;
     this.phase = 'result';
     const v = cur.view;
-    for (const c of v.cellEls) {
-      c.el.classList.remove('glow');
-      c.el.classList.toggle('win', cur.board.winCells.includes(c.id));
-      if (r.it.m > 0 && !cur.board.winCells.includes(c.id)) c.el.classList.add('dim');
-    }
+    v.el.classList.remove('tense');
+    for (const c of v.cellEls) c.el.classList.remove('glow');
     const res = v.el.querySelector('.t-result');
     res.hidden = false;
     const [cx, cy] = centerOf(v.el);
-    if (r.it.m === 0) {
-      v.el.classList.add('lost');
-      if (cur.board.near) this.game.noteNear();
-      res.innerHTML = `<div class="stamp lose">꽝</div>${cur.board.near ? `<div class="res-note">${NEAR_TEXT[cur.ticket.rule]}</div>` : ''}`;
-      cur.board.near ? sfx.near() : sfx.lose();
-    } else {
-      v.el.classList.add('won', 'c-' + r.cls);
-      res.innerHTML = `
-        <div class="stamp win c-${r.cls}">
-          <span class="stamp-label">${E.TIER_LABEL[r.cls]}${r.it.g ? ' · 황금 2배' : ''}</span>
-          <b class="stamp-amt">+${won(r.total)}</b>
-          <span class="stamp-why">${WIN_TEXT[cur.ticket.rule]}${r.extra > 0 ? ` · 보너스 +${short(r.extra)}` : ''}</span>
-        </div>`;
-      if (r.cls === 'even') { sfx.even(); }
-      else if (r.cls === 'small') { sfx.small(); haptic.small(); fx.coins(cx, cy, 10, 0.8); }
-      else if (r.cls === 'mid') { sfx.mid(); haptic.mid(); fx.coins(cx, cy, 26, 1.1); fx.shake(v.el, 0.6); }
-      if (r.cls === 'big' || r.cls === 'mega') {
-        fx.shake(document.getElementById('game'), 1);
-        await celebrate(r);
-      }
-      fx.floatText(cx, cy - 20, `+${shortWon(r.total)}`, 'plus c-' + r.cls);
+    const missedTraps = discard ? cur.card.cells.filter((c) => c.sym.kind === 'trap' && !r.it.rv.includes(c.i)).length : 0;
+    const amt = `${r.total < 0 ? '−' : '+'}${won(Math.abs(r.total))}`;
+    let label = E.TIER_LABEL[r.cls];
+    let why = `가격의 ${fmtMult(r.m)}배`;
+    if (discard) { label = '버림'; why = missedTraps ? `숨은 함정 ${missedTraps}개를 피했어요!` : '함정은 없었어요…'; }
+    v.el.classList.add(r.m >= 1 ? 'won' : 'lost', 'c-' + r.cls);
+    if (r.cls === 'lose') res.innerHTML = '<div class="stamp lose">꽝</div>';
+    else res.innerHTML = `<div class="stamp win c-${r.cls}${r.total < 0 ? ' neg' : ''}"><span class="stamp-label">${label}${r.it.g ? ' · 황금 2배' : ''}</span><b class="stamp-amt">${amt}</b><span class="stamp-why">${why}</span></div>`;
+    if (r.near) res.insertAdjacentHTML('beforeend', `<div class="res-note">${cur.ticket.match ? '보너스 그림 2개… 아깝다!' : '아깝다!'}</div>`);
+    if (discard) sfx.click();
+    else if (r.cls === 'trap') sfx.lose();
+    else if (r.cls === 'lose' || r.cls === 'bit') r.near ? sfx.near() : sfx.lose();
+    else if (r.cls === 'even') sfx.even();
+    else if (r.cls === 'small') { sfx.small(); fx.coins(cx, cy, 10, 0.8); }
+    else if (r.cls === 'mid') { sfx.mid(); haptic.mid(); fx.coins(cx, cy, 26, 1.1); fx.shake(v.el, 0.6); }
+    if (r.cls === 'big' || r.cls === 'mega') {
+      fx.shake(document.getElementById('game'), 1);
+      await celebrate(r);
     }
     this.app.tutorial?.update();
+    this.app.owner?.onResult(r);
     this.scheduleNext(r);
   }
 
   scheduleNext(r) {
     if (!this.game.s.stack.length) return;
-    const delay = r.it.m === 0 ? 650 : r.cls === 'even' ? 800 : r.cls === 'small' ? 1100 : 1500;
+    const delay = r.m < 1 ? 700 : r.cls === 'even' ? 850 : r.cls === 'small' ? 1100 : 1500;
     const go = () => {
       if (this.phase !== 'result') return;
       clearTimeout(this.autoNext);
@@ -399,7 +466,7 @@ export class ShopView {
     this.stackBadge.textContent = `남은 복권 ${n}장`;
   }
 
-  // ───────── 도우미 ─────────
+  // ───────── 도우미: 작은 복권을 긁는 모습이 보이게 ─────────
   renderHelpers() {
     const s = this.game.s;
     if (!s.life.helpers) {
@@ -407,22 +474,28 @@ export class ShopView {
       return;
     }
     if (this.helpersEl.childElementCount !== s.life.helpers) {
-      this.helpersEl.innerHTML = Array.from({ length: s.life.helpers }, (_, i) => `<span class="helper" data-i="${i}" title="도우미 ${i + 1}">${ui('helper')}<i class="helper-ring"></i></span>`).join('');
+      this.helpersEl.innerHTML = Array.from({ length: s.life.helpers }, (_, i) => `<span class="helper" data-i="${i}" title="도우미 ${i + 1}"><span class="helper-face">${ui('helper')}</span><span class="helper-card"><i class="hc-band"></i><i class="hc-foil"></i></span></span>`).join('');
     }
     [...this.helpersEl.children].forEach((el, i) => {
       const j = s.helperJobs[i];
       el.classList.toggle('busy', !!j);
-      el.style.setProperty('--p', j ? 1 - Math.max(0, j.left) / j.total : 0);
+      if (j) {
+        const band = THEMES[j.it.t]?.band || '#888';
+        if (el.dataset.band !== band) { el.dataset.band = band; el.style.setProperty('--hb', band); }
+        el.style.setProperty('--p', (1 - Math.max(0, j.left) / j.total).toFixed(3));
+      }
     });
   }
   onHelperResult(r) {
-    const el = this.helpersEl.children[0];
+    const idx = Math.max(0, [...this.helpersEl.children].findIndex((el) => !el.classList.contains('busy')));
+    const el = this.helpersEl.children[idx] || this.helpersEl.children[0];
     const [x, y] = el ? centerOf(el) : [innerWidth / 2, 120];
-    if (r.it.m > 0) {
-      fx.floatText(x, y + 10, `+${shortWon(r.total)}`, 'plus small c-' + r.cls);
+    if (el) { el.classList.remove('payout'); void el.offsetWidth; el.classList.add('payout'); }
+    if (r.total > 0) {
+      fx.floatText(x, y + 14, `+${shortWon(r.total)}`, 'plus small c-' + r.cls);
       if (r.cls === 'big' || r.cls === 'mega') celebrate(r);
-      else if (r.cls === 'mid') { sfx.mid(); fx.coins(x, y, 10, 0.7); }
-    }
+      else if (r.cls === 'mid') { sfx.mid(); fx.coins(x, y, 10, 0.7); } else if (r.m >= 1) sfx.coin(2, 2);
+    } else if (r.total < 0) fx.floatText(x, y + 14, `−${shortWon(-r.total)}`, 'plus small trap');
   }
 
   // ───────── 알바 ─────────
@@ -433,7 +506,14 @@ export class ShopView {
       const r = this.game.tap(performance.now());
       const level = E.COMBO.tiers.indexOf(r.tier);
       sfx.tap(level);
-      fx.floatText(e.clientX + (Math.random() - 0.5) * 30, e.clientY - 24, `+${short(r.value)}`, 'tap');
+      fx.floatText(e.clientX + (Math.random() - 0.5) * 30, e.clientY - 24, `+${short(r.value)}`, r.tip ? 'tip' : 'tap');
+      this.flyItem(e.clientX, e.clientY);
+      if (r.tip) {
+        sfx.coin(6, 4);
+        haptic.small();
+        fx.coins(e.clientX, e.clientY - 20, 8, 0.8);
+        this.app.owner?.tip(r.value);
+      }
       btn.classList.remove('press');
       void btn.offsetWidth;
       btn.classList.add('press');
@@ -448,6 +528,23 @@ export class ShopView {
     });
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   }
+  // 스캔한 물건이 버튼 위로 튀어 오른다(가볍게, 동시에 6개까지)
+  flyItem(x, y) {
+    if (fx.isReduced()) return;
+    this.flying = (this.flying || 0);
+    if (this.flying >= 6) return;
+    this.flying++;
+    const el = document.createElement('div');
+    el.className = 'fly-item';
+    el.innerHTML = itemIcon(Math.floor(Math.random() * 4));
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.setProperty('--dx', (Math.random() - 0.5) * 140 + 'px');
+    el.style.setProperty('--rot', (Math.random() - 0.5) * 120 + 'deg');
+    document.body.appendChild(el);
+    setTimeout(() => { el.remove(); this.flying--; }, 700);
+  }
+
   renderJob() {
     const s = this.game.s;
     $('.job-rank', this.jobBtn).textContent = `${E.JOB_RANKS[E.jobRankIndex(s.life.job)]} · Lv.${s.life.job}`;
@@ -479,23 +576,24 @@ export class ShopView {
   oddsTable(id) {
     const g = this.game;
     const t = E.TICKET_BY_ID[id];
-    const tiers = E.effectiveTiers(t, g.s.life.luck);
     const price = g.price(id);
-    const lose = 1 - tiers.reduce((s, [, w]) => s + w, 0) / E.WEIGHT_TOTAL;
-    const rows = tiers.slice().reverse().map(([m, w]) => {
-      const p = w / E.WEIGHT_TOTAL;
-      return `<tr><td>${E.TIER_LABEL[E.tierClass(m)]}</td><td>${m}배</td><td class="num">${won(price * m)}</td><td class="num">${pct(p, p < 0.01 ? 2 : 1)}</td><td class="num muted">${oneIn(p)}</td></tr>`;
-    }).join('');
+    const ws = E.cellWeights(t, g.s.life.luck);
+    const W = ws.reduce((a, b) => a + b.w, 0);
+    const kindName = { blank: '꽝', val: '돈', mult: '배수', trap: '함정', clover: '황금 클로버' };
+    const rows = ws.map(({ sym, w }) => `<tr class="k-${sym.kind}"><td class="o-ic">${symIcon(sym)}</td><td>${kindName[sym.kind]}${t.match && sym.id === t.match.sym ? ' · 보너스' : ''}</td><td class="num">${sym.kind === 'blank' ? '0원' : symLabel(t, sym, price, false)}</td><td class="num">${pct(w / W, w / W < 0.01 ? 2 : 1)}</td></tr>`).join('');
+    const st = g.stats(id);
     return `
+      <p class="muted tiny">칸 ${t.cells}개에 아래 그림이 하나씩, 칸마다 따로 정해져요(구매하는 순간 확정).</p>
       <table class="odds">
-        <thead><tr><th>등급</th><th>배수</th><th>당첨금</th><th>확률</th><th></th></tr></thead>
-        <tbody>${rows}<tr class="lose-row"><td>꽝</td><td>-</td><td class="num">0원</td><td class="num">${pct(lose)}</td><td></td></tr></tbody>
+        <thead><tr><th></th><th>그림</th><th>금액</th><th>칸당 확률</th></tr></thead>
+        <tbody>${rows}</tbody>
       </table>
       <ul class="facts">
-        <li>지금 기대값 <b>${pct(g.rtp(id))}</b> (가격 1원당 평균 ${g.rtp(id).toFixed(2)}원을 돌려받아요)</li>
-        <li>황금 복권 확률 ${pct(g.goldenChance())} · 황금 복권은 당첨금 2배</li>
-        <li>행운 부적 Lv.${g.s.life.luck} 반영${g.bonus() > 0 ? ` · 당첨금 보너스 +${pct(g.bonus(), 0)}` : ''}</li>
-        <li>결과는 구매하는 순간 정해지고, 긁기는 공개하는 과정이에요. 연속 꽝을 보정하는 장치는 없어요.</li>
+        ${t.match ? `<li>같은 보너스 그림 ${t.match.need}개 → 보너스 <b>+${won(price * t.match.bonus)}</b></li>` : ''}
+        <li>배수 칸은 이 복권에서 받은 돈 전체(보너스 포함)를 키워요. 함정 칸은 배수와 상관없이 그대로 빠져요.</li>
+        <li>지금 기대값 약 <b>${pct(g.rtp(id))}</b> (전부 열 때 기준) · 본전 이상 ${pct(st.even, 0)} · 15배 이상 ${oneIn(st.big)}${st.trap ? ` · 함정 손해 ${pct(st.trap, 0)}` : ''}</li>
+        <li>황금 복권 ${pct(g.goldenChance())} 확률로 등장, 돈·보너스 2배 · 행운 부적 Lv.${g.s.life.luck} 반영</li>
+        <li>최고 ${t.maxMult}배를 넘는 판은 나오지 않아요. 연속 꽝 보정은 없어요.</li>
       </ul>`;
   }
   showOdds(id) {
@@ -507,7 +605,7 @@ export class ShopView {
     const t = E.TICKET_BY_ID[id];
     const cost = g.unlockCost(id);
     const can = g.s.money >= cost;
-    const top = Math.max(...t.tiers.map(([m]) => m));
+    const top = t.maxMult;
     const m = openModal({
       title: `새 복권: ${t.name}`,
       body: `
@@ -540,4 +638,8 @@ export class ShopView {
 function centerOf(el) {
   const r = el.getBoundingClientRect();
   return [r.left + r.width / 2, r.top + r.height / 2];
+}
+
+function fmtMult(m) {
+  return (Math.round(m * 100) / 100).toLocaleString('ko-KR');
 }
