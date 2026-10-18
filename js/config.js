@@ -3,7 +3,7 @@ export const API_URL = 'https://script.google.com/macros/s/AKfycbwuUbg0ToxelRad9
 
 export const AUTOSAVE_SEC = 60; // 서버 자동저장 주기
 export const LOCAL_SAVE_SEC = 5; // 브라우저 저장 주기
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '3.0.0';
 
 // 테스트용 모의 서버는 내 컴퓨터(localhost)에서 실행할 때만 쓴다.
 // 공개 주소에서는 링크에 다른 서버 주소를 넣어도 무시한다(비밀번호 가로채기 방지).

@@ -30,27 +30,60 @@ await page.fill('#auth-pw', '0516');
 await page.fill('#auth-pw2', '0516');
 await shot('02-signup');
 await page.click('.auth-submit');
-await page.waitForSelector('#game .job-btn', { timeout: 10000 });
+await page.waitForSelector('#game #job-btn', { timeout: 10000 });
 await page.waitForTimeout(500);
 await shot('03-game-start');
-const jb = await page.locator('#job-btn').boundingBox();
-for (let i = 0; i < 95; i++) {
-  await page.touchscreen.tap(jb.x + jb.width / 2, jb.y + jb.height / 2);
-  await page.waitForTimeout(40);
-}
-await shot('04-after-taps');
+// 계산대: 바코드가 선에 닿을 때 누르는 "사람"을 페이지 안에서 흉내 낸다(offset ms만큼 어긋나게)
+await page.evaluate(() => {
+  const el = document.getElementById('job-btn');
+  const press = () => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, clientY: innerHeight - 60 }));
+  press();
+  window.__bot = { on: true, offset: 40 };
+  const loop = () => {
+    if (!window.__bot.on) return;
+    const reg = window.__app.game.register;
+    const now = performance.now();
+    const it = reg.items.filter((x) => x.res === null).sort((a, b) => a.hit - b.hit)[0];
+    if (!reg.paused && it && now >= it.hit + window.__bot.offset - 8) press();
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+});
+await page.waitForTimeout(2500);
+await shot('04-register');
+await page.waitForFunction(() => window.__app.game.s.money >= 1000, null, { timeout: 90000 });
+const jobStats = await page.evaluate(() => { window.__bot.on = false; return { scans: window.__app.game.s.stats.taps, play: window.__app.game.s.playSec ?? null, money: window.__app.game.s.money }; });
+console.log('첫 복권까지', JSON.stringify(jobStats));
+await shot('04b-after-job');
 await page.click('#buy-btn');
 await page.waitForTimeout(900);
 await shot('05-ticket');
 const play = await page.locator('.stage-deck .t-play').boundingBox();
+let sweeps = 0;
 await page.mouse.move(play.x + 5, play.y + 5);
 await page.mouse.down();
-for (let y = play.y + 5; y < play.y + play.height; y += 14) {
-  await page.mouse.move(play.x + play.width - 5, y, { steps: 6 });
-  await page.mouse.move(play.x + 5, y + 7, { steps: 6 });
-  if (y > play.y + play.height * 0.4 && y < play.y + play.height * 0.4 + 14) await shot('06-scratching');
+// 먼저 가볍게 한 번만 쓸어서 은박이 얇아진 모습을 찍는다
+for (let y = play.y + 10; y < play.y + play.height; y += 28) {
+  await page.mouse.move(play.x + play.width - 5, y, { steps: 10 });
+  await page.mouse.move(play.x + 5, y + 28, { steps: 10 });
+}
+await shot('06-scratching-0-thin');
+// 위에서 아래로 한 번 쓸어내리는 것을 1회로 센다. 다 열릴 때까지 반복
+for (let pass = 0; pass < 12; pass++) {
+  for (let y = play.y + 10; y < play.y + play.height; y += 28) {
+    await page.mouse.move(play.x + play.width - 5, y, { steps: 10 });
+    await page.mouse.move(play.x + play.width - 5, y + 14, { steps: 2 });
+    await page.mouse.move(play.x + 5, y + 14, { steps: 10 });
+    await page.mouse.move(play.x + 5, y + 28, { steps: 2 });
+  }
+  sweeps++;
+  if (pass === 0) await shot('06-scratching-1');
+  if (pass === 1) await shot('06-scratching-2');
+  const left = await page.evaluate(() => { const sc = window.__app.shop.cur?.scratcher; return sc && !sc.done ? sc.cells.length - sc.revealed.size : 0; });
+  if (!left) break;
 }
 await page.mouse.up();
+console.log('다 열릴 때까지 전체 쓸기', sweeps, '회');
 await page.waitForTimeout(1200);
 await shot('07-result');
 await page.waitForTimeout(2500);

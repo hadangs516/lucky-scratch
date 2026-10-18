@@ -5,22 +5,84 @@ import { Game, defaultState, migrate } from '../js/state.js';
 import * as E from '../js/economy.js';
 import { mulberry32 } from '../js/rng.js';
 
-const tapUntil = (g, money) => { let t = 0; while (g.s.money < money) g.tap((t += 150)); return t; };
+// 계산대를 정확히(또는 offset만큼 어긋나게) 치는 사람
+function work(g, { until = Infinity, ms = Infinity, offset = 0 } = {}) {
+  let t = 1000;
+  g.work(t); // 시작
+  const end = t + ms;
+  let scans = 0;
+  while (g.s.money < until && t < end) {
+    g.workUpdate(t);
+    const next = g.register.items.filter((it) => it.res === null).sort((a, b) => a.hit - b.hit)[0];
+    if (!next) { t += 50; continue; }
+    t = Math.max(t, next.hit + offset);
+    g.workUpdate(t);
+    const ev = g.work(t);
+    if (ev.type === 'scan') scans++;
+    t += 1;
+  }
+  return { scans, t: t - 1000 };
+}
+const tapUntil = (g, money) => work(g, { until: money });
 
-test('첫 복권까지 70~100회 탭(콤보 유지 시)', () => {
+test('첫 복권까지: "좋음"으로 치면 바코드 25~45개(25~60초), 전부 "정확"이면 더 빨리', () => {
   const g = new Game(defaultState(), mulberry32(1));
-  let n = 0, t = 0;
-  while (g.s.money < 1000) { g.tap((t += 150)); n++; }
-  assert.ok(n >= 70 && n <= 100, `탭 ${n}회`);
+  const r = work(g, { until: 1000, offset: 110 });
+  assert.ok(r.scans >= 25 && r.scans <= 45, `바코드 ${r.scans}개`);
+  assert.ok(r.t >= 25000 && r.t <= 60000, `${(r.t / 1000).toFixed(1)}초`);
   assert.equal(g.s.tut, 1);
+  const p = work(new Game(defaultState(), mulberry32(1)), { until: 1000 });
+  assert.ok(p.scans >= 10 && p.scans < r.scans, `정확 ${p.scans}개`);
 });
 
-test('콤보는 1.2초 쉬면 끊긴다', () => {
+test('광클로는 거의 못 번다(타이밍 맞춘 사람의 4분의 1 미만)', () => {
+  const a = new Game(defaultState(), mulberry32(3));
+  work(a, { ms: 30000 });
+  const b = new Game(defaultState(), mulberry32(3));
+  for (let t = 1000; t < 31000; t += 80) { b.workUpdate(t); b.work(t); }
+  assert.ok(b.s.money < a.s.money * 0.25, `광클 ${b.s.money} vs 타이밍 ${a.s.money}`);
+});
+
+test('헛손질하면 스캐너가 잠깐 멈추고 연속 계산이 끊긴다', () => {
   const g = new Game(defaultState(), mulberry32(1));
-  for (let i = 0; i < 30; i++) g.tap(i * 100);
-  assert.equal(g.combo.count, 30);
-  const r = g.tap(30 * 100 + 1300);
-  assert.equal(r.combo, 1);
+  work(g, { ms: 8000 });
+  assert.ok(g.register.combo > 3);
+  const t = g.register.items.find((it) => it.res === null).hit - 400; // 물건이 아직 멀다
+  const ev = g.work(t);
+  assert.equal(ev.type, 'jam');
+  assert.equal(g.register.combo, 0);
+  assert.equal(g.work(t + 100).type, 'jammed');
+});
+
+test('판정: ±70ms 정확, ±150ms 좋음, 계란은 정확이 아니면 깨진다', () => {
+  const g = new Game(defaultState(), mulberry32(5));
+  g.work(0);
+  g.workUpdate(0);
+  const next = (t) => { g.workUpdate(t); return g.register.items.find((x) => x.res === null); };
+  const it = next(0);
+  assert.equal(g.work(it.hit + 60).res, 'perfect');
+  const it2 = next(it.hit + 61);
+  g.workUpdate(it2.hit - 120);
+  assert.equal(g.work(it2.hit - 120).res, 'good');
+  const it3 = next(it2.hit);
+  it3.kind = 'egg';
+  g.workUpdate(it3.hit + 110);
+  assert.equal(g.work(it3.hit + 110).res, 'broken');
+  assert.equal(g.register.combo, 0);
+});
+
+test('멈춘 동안에는 물건이 움직이지 않고, 손 놓고 있으면 알아서 멈춘다', () => {
+  const g = new Game(defaultState(), mulberry32(7));
+  g.work(0);
+  g.workUpdate(500);
+  const it = g.register.items[0];
+  const p = g.register.pos(it, 500);
+  g.register.pause(500);
+  g.work(5500); // 다시 시작
+  assert.ok(Math.abs(g.register.pos(it, 5500) - p) < 1e-9);
+  let t = 5500;
+  while (!g.register.paused && t < 30000) { g.workUpdate(t); t += 50; }
+  assert.ok(g.register.paused, '두 개 연달아 놓치면 멈춤');
 });
 
 test('구매하면 돈이 빠지고 결과가 확정된 복권이 쌓인다', () => {

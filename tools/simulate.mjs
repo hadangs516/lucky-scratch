@@ -1,6 +1,6 @@
 // 진행 속도 시뮬레이터.
 // 사람이 하는 플레이를 단순화한 "봇"으로 1회차~무한 모드까지 돌려
-// 첫 복권까지 탭 수, 해금 시점, 환생 시점, 수입 비중 등을 측정한다.
+// 첫 복권까지 계산한 바코드 수, 해금 시점, 환생 시점, 수입 비중 등을 측정한다.
 //
 // 사용법: node tools/simulate.mjs [시드 개수=200] [--verbose]
 import * as E from '../js/economy.js';
@@ -21,22 +21,30 @@ function mulberry32(a) {
 
 // 플레이어 모델
 const DEFAULT_PLAYER = {
-  tapRate: 5, // 초당 탭
-  scratchSpeed: 700, // 손가락 이동 px/초
-  scratchEff: 0.55, // 겹쳐 긁는 비율을 뺀 효율
+  acc: { perfect: 0.5, good: 0.38 }, // 계산대 판정 비율(나머지는 놓침·헛손질)
+  scratchSpeed: 900, // 손가락 이동 px/초
+  scratchEff: 0.75, // 겹쳐 긁는 비율을 뺀 효율
   overhead: 1.2, // 구매 버튼 → 결과 확인까지 고정 시간
   spendFrac: 0.5, // 업그레이드는 보유액의 이 비율 이하일 때 산다
   betFrac: 0.5, // 복권 한 장 값이 보유액의 이 비율 이하인 가장 비싼 복권을 고른다
   saveFrom: 0.3,
+  saveBet: 0.5, // 해금 자금을 모으는 동안 판돈 비율(0이면 복권을 멈추고 알바만)
   tiersBack: 0, // 최신 복권이 비싸면 몇 단계 아래까지 사는지 // 다음 해금 비용의 이 비율 이상 모이면 복권을 멈추고 저축한다(목표 지향)
   decisionEvery: 1, // 탭하는 동안 몇 초마다 다시 판단하는지
 };
-const SCRATCH_AREA = 300 * 175; // 은박 면적(px²)
+// 은박 면적(px², 390px 폭 화면 기준). 3줄짜리 복권은 더 크다.
+const scratchArea = (tk) => (tk.cells / tk.cols >= 3 ? 340 * 231 : 340 * 181);
 
-function manualTime(toolLevel, p) {
+// 직접 긁는 시간: 은박 전체를 붓 폭 간격으로 덮는 것을 rubs×1.45번(tools/dev/scratch-feel.mjs 브라우저 실측으로 맞춘 값) 반복한다
+function manualTime(toolLevel, tk, p) {
   const t = E.toolStats(toolLevel);
-  return p.overhead + (SCRATCH_AREA * t.threshold) / (2 * t.radius * p.scratchSpeed * p.scratchEff) + 0.4;
+  const sweeps = Math.max(1, E.rubsNeeded(t.strength, E.foilThickness(tk)) * 1.45);
+  return p.overhead + (scratchArea(tk) * sweeps) / (2 * t.radius * p.scratchSpeed * p.scratchEff) + 0.4;
 }
+
+// 계산대: 물건 하나를 처리하는 데 걸리는 평균 시간(초)과 판정
+const R = E.REGISTER;
+const itemGap = (combo) => ((R.gap[0] + R.gap[1]) / 2 + R.customerGap / ((R.basket[0] + R.basket[1]) / 2)) / 1000 / E.registerSpeed(combo);
 function celebrateTime(mult) {
   const c = E.tierClass(mult);
   return { trap: 0.4, lose: 0, bit: 0.2, even: 0.3, small: 0.6, mid: 1.5, big: 3, mega: 4.5 }[c];
@@ -71,7 +79,7 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
     const goal = E.prestigeGoal(stage);
     const log = { stage, events: [], tapIncome: 0, ticketNet: 0, tickets: 0, bigWins: 0, busts: 0, firstTicketTaps: null, taps: 0 };
     let t = 0;
-    let combo = 0, lastTap = -99;
+    let combo = 0, workAcc = 0, cust = { left: 0, sum: 0, clean: true, perfect: true };
     let busy = 0; // 사람의 남은 작업 시간
     let pending = null; // 사람이 긁고 있는 복권 결과
     const helperTimers = [];
@@ -126,10 +134,12 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
     // 사람 모델: 최신 복권(또는 바로 아래 등급)만 산다. 옛날 싼 복권으로는 잘 돌아가지 않는다.
     const chooseTicket = () => {
       const next = E.TICKETS.find((x) => !L.unlocked.has(x.id) && x.stageReq <= stage);
-      if (next && L.money >= p.saveFrom * E.unlockCost(next, perks.discount)) return null;
+      // 해금을 위해 모으는 중이면 판돈을 절반으로 줄여서 계속 긁는다(손 놓고 알바만 하지는 않는다)
+      const saving = next && L.money >= p.saveFrom * E.unlockCost(next, perks.discount);
       const owned = E.TICKETS.filter((x) => L.unlocked.has(x.id));
       const cands = owned.slice(-1 - p.tiersBack).reverse();
-      const frac = owned.length === 1 ? 1 : p.betFrac; // 처음엔 1장 살 돈만 있어도 산다
+      if (saving && !p.saveBet) return null;
+      const frac = owned.length === 1 ? 1 : p.betFrac * (saving ? p.saveBet : 1); // 처음엔 1장 살 돈만 있어도 산다
       for (const x of cands) if (E.ticketPrice(x, L.stake) <= L.money * frac) return x;
       return null;
     };
@@ -153,7 +163,7 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
         }
       } else if (L.stack.length) {
         pending = L.stack.shift();
-        busy = manualTime(L.tool, p);
+        busy = manualTime(L.tool, E.TICKET_BY_ID[pending], p);
       } else if (t >= nextDecision) {
         nextDecision = t + p.decisionEvery;
         if (log.firstTicketTaps !== null || stage > 0) buyUpgrades(); // 튜토리얼: 첫 복권 전에는 강화 탭이 잠겨 있다
@@ -165,14 +175,22 @@ function simulateRun(seed, player = DEFAULT_PLAYER, opts = {}) {
           if (log.firstTicketTaps === null) log.firstTicketTaps = log.taps;
         }
       }
-      // 사람이 할 일이 없으면 탭
+      // 사람이 할 일이 없으면 계산대 알바(물건 하나씩 판정)
       if (busy <= 0 && !L.stack.length && !pending) {
-        const taps = p.tapRate * dt;
-        if (t - lastTap > E.COMBO.timeout) combo = 0;
-        combo += taps;
-        lastTap = t;
-        const v = E.tapValue(L.job, perks.job, E.comboTier(combo).mult) * taps;
-        L.money += v; log.tapIncome += v; log.taps += taps;
+        workAcc += dt;
+        let v = 0;
+        while (workAcc >= itemGap(combo)) {
+          workAcc -= itemGap(combo);
+          if (cust.left <= 0) cust = { left: R.basket[0] + Math.floor(rng() * (R.basket[1] - R.basket[0] + 1)), sum: 0, clean: true, perfect: true };
+          const x = rng();
+          let m = 0;
+          if (x < p.acc.perfect) { combo++; m = R.perfectMult * E.comboTier(combo).mult; } else if (x < p.acc.perfect + p.acc.good) { combo++; m = R.goodMult * E.comboTier(combo).mult; cust.perfect = false; } else { combo = 0; cust.clean = cust.perfect = false; }
+          if (m) log.taps++;
+          cust.sum += m;
+          v += E.tapValue(L.job, perks.job, m);
+          if (--cust.left === 0) v += E.tapValue(L.job, perks.job, cust.sum * (cust.perfect ? R.perfectBonus : cust.clean ? R.cleanBonus : 0));
+        }
+        L.money += v; log.tapIncome += v;
       }
       L.peak = Math.max(L.peak, L.money);
       const top = E.TICKETS.filter((x) => L.unlocked.has(x.id)).at(-1);
@@ -217,9 +235,9 @@ export function runReport(n = SEEDS, player = DEFAULT_PLAYER, label = '기본 �
   const runs = [];
   for (let i = 0; i < n; i++) runs.push(simulateRun(1000 + i, player));
   const out = [];
-  out.push(`## ${label} (시드 ${n}개, 초당 ${player.tapRate}탭, 베팅 비율 ${player.betFrac})`);
+  out.push(`## ${label} (시드 ${n}개, 계산대 정확 ${Math.round(player.acc.perfect * 100)}%·좋음 ${Math.round(player.acc.good * 100)}%, 베팅 비율 ${player.betFrac})`);
   out.push('');
-  out.push('| 회차 | 소요 시간 P10 / 중앙값 / P90 (분) | 탭 수입 비중 | 긁은 복권(중앙값) | 15배 이상 당첨(중앙값) | 파산 경험 비율 | 클로버(중앙값) |');
+  out.push('| 회차 | 소요 시간 P10 / 중앙값 / P90 (분) | 알바 수입 비중 | 긁은 복권(중앙값) | 15배 이상 당첨(중앙값) | 파산 경험 비율 | 클로버(중앙값) |');
   out.push('|---|---|---|---|---|---|---|');
   for (let s = 0; s < runs[0].length; s++) {
     const L = runs.map((r) => r[s]);
@@ -229,7 +247,7 @@ export function runReport(n = SEEDS, player = DEFAULT_PLAYER, label = '기본 �
   }
   const ft = runs.map((r) => r[0].firstTicketTaps);
   out.push('');
-  out.push(`- 첫 복권까지 탭 수: 중앙값 ${pct(ft, 0.5).toFixed(0)}회 (범위 ${Math.min(...ft).toFixed(0)}~${Math.max(...ft).toFixed(0)})`);
+  out.push(`- 첫 복권까지 계산한 바코드: 중앙값 ${pct(ft, 0.5).toFixed(0)}개 (범위 ${Math.min(...ft).toFixed(0)}~${Math.max(...ft).toFixed(0)})`);
   // 1회차 이벤트 시점 중앙값
   const evTimes = {};
   for (const r of runs) for (const [t, e] of r[0].events) { const k = e.replace(/^보장 당첨 .*/, '보장 당첨'); (evTimes[k] ??= []).push(t); }
@@ -257,7 +275,7 @@ if (import.meta.url === `file://${process.argv[1]}` && args.includes('--life1'))
 } else if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(runReport());
   console.log('');
-  console.log(runReport(SEEDS, { ...DEFAULT_PLAYER, tapRate: 3.5, betFrac: 0.25, tiersBack: 1, spendFrac: 0.7, saveFrom: 0.2 }, '신중한 플레이어(느린 탭, 적게 베팅)'));
+  console.log(runReport(SEEDS, { ...DEFAULT_PLAYER, acc: { perfect: 0.3, good: 0.5 }, scratchSpeed: 650, betFrac: 0.25, tiersBack: 1, spendFrac: 0.7, saveFrom: 0.2, saveBet: 0 }, '신중한 플레이어(계산 서툼, 천천히 긁음, 적게 베팅)'));
   console.log('');
-  console.log(runReport(SEEDS, { ...DEFAULT_PLAYER, tapRate: 7, betFrac: 1, spendFrac: 0.4, saveFrom: 2 }, '공격적인 플레이어(빠른 탭, 크게 베팅)'));
+  console.log(runReport(SEEDS, { ...DEFAULT_PLAYER, acc: { perfect: 0.7, good: 0.25 }, scratchSpeed: 1200, betFrac: 1, spendFrac: 0.4, saveFrom: 2 }, '공격적인 플레이어(계산 능숙, 빨리 긁음, 크게 베팅)'));
 }

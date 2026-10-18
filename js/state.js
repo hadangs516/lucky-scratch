@@ -5,6 +5,7 @@ import { ACHIEVEMENTS } from './achievements.js';
 import { short } from './format.js';
 import { makeCard, cardAmount } from './cards.js';
 import { CARD_STATS } from './cardStats.js';
+import { Register } from './job.js';
 
 export const SAVE_VERSION = 2;
 export const STACK_MAX = 100;
@@ -24,7 +25,7 @@ const ZERO_STATS = {
   tickets: 0, wins: 0, even: 0, small: 0, mid: 0, big: 0, mega: 0, near: 0, golden: 0, goldenWins: 0,
   taps: 0, tapIncome: 0, best: 0, bestName: '', bestMult: 0, totalWon: 0, spent: 0,
   loseStreak: 0, maxLoseStreak: 0, maxCombo: 0, helperTickets: 0, prestiges: 0,
-  bit: 0, trapHits: 0, discards: 0, cloverCells: 0, bonusHits: 0, tips: 0,
+  bit: 0, trapHits: 0, discards: 0, cloverCells: 0, bonusHits: 0, tips: 0, perfects: 0, customers: 0, perfectCust: 0,
 };
 
 export function defaultState() {
@@ -91,7 +92,7 @@ export class Game {
     this.s = migrate(state);
     this.rng = rng;
     this.handlers = {};
-    this.combo = { count: 0, last: -1e9 };
+    this.register = new Register(rng, () => E.jobRankIndex(this.s.life.job));
     this.cards = new Map();
   }
 
@@ -109,7 +110,7 @@ export class Game {
     return !this.isUnlocked(id) && t.stageReq <= this.s.stage && (i === 0 || this.isUnlocked(E.TICKETS[i - 1].id));
   }
   unlockCost(id) { return E.unlockCost(this.ticket(id), this.s.perks.discount); }
-  tapValue(comboMult = 1) { return E.tapValue(this.s.life.job, this.s.perks.job, comboMult); }
+  tapValue(mult = 1) { return E.tapValue(this.s.life.job, this.s.perks.job, mult); }
   bonus() { return E.prizeBonus(this.s.life.luck, this.s.perks.prize); }
   goldenChance() { return E.goldenChance(this.s.perks.golden); }
   tool() { return E.toolStats(this.s.life.tool); }
@@ -145,25 +146,37 @@ export class Game {
     this.emit('money', this.s.money);
   }
 
-  // ───────── 알바 ─────────
-  comboNow(nowMs) {
-    return nowMs - this.combo.last <= E.COMBO.timeout * 1000 ? this.combo.count : 0;
+  // ───────── 알바: 편의점 계산대 ─────────
+  // 화면을 눌렀을 때. 돌려주는 사건에 번 돈(value)을 붙인다.
+  work(nowMs) {
+    const ev = this.register.tap(nowMs);
+    if (ev.type === 'scan') this.creditScan(ev);
+    return ev;
   }
-  tap(nowMs) {
-    const before = E.comboTier(this.comboNow(nowMs));
-    this.combo.count = this.comboNow(nowMs) + 1;
-    this.combo.last = nowMs;
-    const tier = E.comboTier(this.combo.count);
-    // 가끔 단골손님이 팁을 준다(첫 복권을 긁은 뒤부터, 탭 수입 ×10)
-    const tip = this.s.tut >= 3 && this.rng() < E.JOB.tipChance;
-    const value = this.tapValue(tier.mult) * (tip ? E.JOB.tipMult : 1);
-    if (tip) this.s.stats.tips++;
-    this.s.stats.taps++;
-    this.s.stats.tapIncome += value;
-    if (this.combo.count > this.s.stats.maxCombo) this.s.stats.maxCombo = this.combo.count;
-    this.addMoney(value);
+  // 매 프레임: 놓친 물건 처리
+  workUpdate(nowMs) {
+    const evs = this.register.update(nowMs);
+    for (const ev of evs) if (ev.type === 'scan') this.creditScan(ev);
+    return evs;
+  }
+  creditScan(ev) {
+    const st = this.s.stats;
+    ev.value = ev.mult > 0 ? this.tapValue(ev.mult) : 0;
+    if (ev.done?.bonus > 0) {
+      ev.done.value = this.tapValue(ev.done.bonus);
+      st.tips++;
+    }
+    const v = ev.value + (ev.done?.value || 0);
+    if (ev.mult > 0) st.taps++;
+    if (ev.res === 'perfect') st.perfects = (st.perfects || 0) + 1;
+    if (ev.done) st.customers = (st.customers || 0) + 1;
+    if (ev.done?.perfect) st.perfectCust = (st.perfectCust || 0) + 1;
+    if (this.register.combo > st.maxCombo) st.maxCombo = this.register.combo;
+    if (v > 0) {
+      st.tapIncome += v;
+      this.addMoney(v);
+    }
     if (this.s.tut === 0 && this.s.money >= this.price('t1')) this.setTut(1);
-    return { value, combo: this.combo.count, tier, tierUp: tier.at > before.at, tip };
   }
 
   // ───────── 구매 ─────────
@@ -324,7 +337,7 @@ export class Game {
     list.push({
       id: 'job', icon: 'job', name: '승진', level: L.job,
       title: `${rank(L.job)} · Lv.${L.job}`,
-      desc: `탭 수입 ${short(this.tapValue())}원 → ${short(E.tapValue(L.job + 1, s.perks.job))}원`,
+      desc: `바코드 1개 ${short(this.tapValue())}원 → ${short(E.tapValue(L.job + 1, s.perks.job))}원`,
       note: E.jobRankIndex(L.job + 1) > E.jobRankIndex(L.job) ? `다음 레벨에 ${rank(L.job + 1)} 승진!` : '',
       cost: E.jobCost(L.job), max: false,
     });
@@ -333,8 +346,8 @@ export class Game {
     list.push({
       id: 'tool', icon: 'tool', name: '긁개', level: L.tool,
       title: `${tool.name} · Lv.${L.tool}`,
-      desc: nextTool ? (nextTool.stage > tool.stage ? `${nextTool.name}(으)로 진화!` : `긁는 폭 ${Math.round(tool.radius * 2)} → ${Math.round(nextTool.radius * 2)}`) : '최고 도구예요',
-      note: `${Math.round(tool.threshold * 100)}%만 긁으면 자동으로 벗겨져요`,
+      desc: nextTool ? (nextTool.stage > tool.stage ? `${nextTool.name}(으)로 진화!` : `긁는 폭 ${Math.round(tool.radius * 2)} → ${Math.round(nextTool.radius * 2)} · 힘 ${Math.round(tool.strength * 100)} → ${Math.round(nextTool.strength * 100)}`) : '최고 도구예요',
+      note: `은박 한 곳을 약 ${E.rubsNeeded(tool.strength, 1).toFixed(1)}번 문지르면 열려요(비싼 복권은 은박이 더 두꺼워요)`,
       cost: nextTool ? E.toolCost(L.tool) : null, max: !nextTool,
     });
     const cut = E.luckCut(L.luck);
@@ -440,7 +453,7 @@ export class Game {
     s.money = E.SEED_MONEY[s.perks.seed] || 0;
     s.peak = s.money;
     s.sel = 't1';
-    this.combo = { count: 0, last: -1e9 };
+    this.register.combo = 0;
     this.emit('prestige', p);
     this.emit('money', s.money);
     this.checkAch();

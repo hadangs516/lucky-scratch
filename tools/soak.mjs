@@ -72,9 +72,23 @@ while (Date.now() < end) {
     stats.buys++;
     await page.waitForTimeout(300);
   } else {
-    const jb = await page.locator('#job-btn').boundingBox();
-    for (let i = 0; i < 25; i++) await page.touchscreen.tap(jb.x + jb.width / 2, jb.y + jb.height / 2);
-    stats.taps += 25;
+    // 계산대: 3초 동안 바코드 타이밍에 맞춰 누른다(가끔 일부러 늦게 → 놓침)
+    stats.taps += await G(() => new Promise((done) => {
+      const el = document.getElementById('job-btn');
+      const press = () => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      const reg = window.__app.game.register;
+      if (reg.paused) press();
+      const t0 = performance.now();
+      let n = 0;
+      const loop = () => {
+        const now = performance.now();
+        if (now - t0 > 3000) return done(n);
+        const it = reg.items.filter((x) => x.res === null).sort((a, b) => a.hit - b.hit)[0];
+        if (!reg.paused && it && now >= it.hit + (it.id % 7 === 0 ? 400 : 20)) { press(); n++; }
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    }));
   }
   if (stats.loops % 60 === 0) await page.screenshot({ path: `${out}/soak-${String(++shotN).padStart(2, '0')}.png` });
 }
