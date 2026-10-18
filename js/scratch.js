@@ -1,7 +1,8 @@
 // 은박 긁기 엔진
 // - 칸마다 은박 창을 그린다(칸 사이 인쇄 글자는 보인다)
 // - 긁은 면적은 5px 격자 표본으로 계산해서 getImageData 없이 가볍게 처리한다
-// - 칸의 45% 이상을 긁으면 그 칸이 "공개", 전체 칸 면적의 threshold 이상이면 나머지가 자동으로 벗겨진다
+// - 칸의 threshold(도구에 따라 50%→20%) 이상을 긁으면 그 칸의 은박이 통째로 벗겨지며 "공개"된다
+// - 모든 칸이 공개되면 끝. 전체 자동 벗기기는 없다(함정 칸을 피할 수 있어야 하므로)
 const STEP = 5;
 
 let foilCache = new Map();
@@ -215,18 +216,33 @@ export class Scratcher {
       if (c.count !== before) {
         changed = true;
         this.covered += c.count - before;
-        if (!this.revealed.has(c.id) && c.count / c.total >= 0.45) {
-          this.revealed.add(c.id);
-          c.el.classList.add('revealed');
-          this.opts.onCell?.(c.id, this.revealed);
-        }
+        if (!this.revealed.has(c.id) && c.count / c.total >= this.opts.threshold) this.openCell(c);
       }
     }
     if (changed) {
       const p = this.covered / this.totalSamples;
       this.opts.onProgress?.(p);
-      if (!this.done && (p >= this.opts.threshold || this.revealed.size === this.cells.length)) this.finish(true);
+      if (!this.done && this.revealed.size === this.cells.length) this.finish(true);
     }
+  }
+
+  // 칸 하나의 은박을 통째로 벗긴다
+  // 이어하기: 이미 연 칸은 정산 없이 벗겨 둔다
+  restore(ids) {
+    for (const c of this.cells) if (ids.includes(c.id)) this.openCell(c, true, true);
+  }
+
+  openCell(c, silent = false, quiet = false) {
+    if (this.revealed.has(c.id)) return;
+    this.revealed.add(c.id);
+    c.el.classList.add('revealed');
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    roundRect(ctx, c.x - 2, c.y - 2, c.w + 4, c.h + 4, Math.min(10, c.w * 0.14, c.h * 0.2));
+    ctx.fill();
+    ctx.restore();
+    if (!quiet) this.opts.onCell?.(c.id, this.revealed, silent);
   }
 
   // 남은 은박을 모두 벗긴다
@@ -234,18 +250,20 @@ export class Scratcher {
     if (this.done) return;
     this.done = true;
     this.drawing = false;
-    for (const c of this.cells) {
-      if (!this.revealed.has(c.id)) {
-        this.revealed.add(c.id);
-        c.el.classList.add('revealed');
-        this.opts.onCell?.(c.id, this.revealed, true);
-      }
-    }
+    for (const c of this.cells) if (!this.revealed.has(c.id)) this.openCell(c, true);
     if (animated) {
       this.canvas.classList.add('peel');
       setTimeout(() => this.canvas.remove(), 450);
     } else this.canvas.remove();
     this.opts.onDone?.();
+  }
+
+  // 버리기: 더 긁지 못하게 멈춘다(남은 은박은 화면에서 따로 보여준다)
+  stop() {
+    this.done = true;
+    this.drawing = false;
+    this.canvas.classList.add('peel');
+    setTimeout(() => this.canvas.remove(), 450);
   }
 
   destroy() {

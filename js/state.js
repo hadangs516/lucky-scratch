@@ -3,8 +3,10 @@ import * as E from './economy.js';
 import { rand, newSeed } from './rng.js';
 import { ACHIEVEMENTS } from './achievements.js';
 import { short } from './format.js';
+import { makeCard, cardAmount } from './cards.js';
+import { CARD_STATS } from './cardStats.js';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const STACK_MAX = 100;
 
 function zeroPerks() {
@@ -22,6 +24,7 @@ const ZERO_STATS = {
   tickets: 0, wins: 0, even: 0, small: 0, mid: 0, big: 0, mega: 0, near: 0, golden: 0, goldenWins: 0,
   taps: 0, tapIncome: 0, best: 0, bestName: '', bestMult: 0, totalWon: 0, spent: 0,
   loseStreak: 0, maxLoseStreak: 0, maxCombo: 0, helperTickets: 0, prestiges: 0,
+  bit: 0, trapHits: 0, discards: 0, cloverCells: 0, bonusHits: 0, tips: 0,
 };
 
 export function defaultState() {
@@ -38,8 +41,8 @@ export function defaultState() {
     life: newLife(perks),
     sel: 't1',
     qty: 1,
-    stack: [], // 산 복권(결과 확정): { t, m, g, n, s, k }
-    active: null, // 지금 직접 긁는 복권
+    stack: [], // 산 복권(결과 확정): { t, s, l, g, n, f, k } — 칸 구성은 cards.js가 시드로 다시 만든다
+    active: null, // 지금 직접 긁는 복권: 위 + { rv: 연 칸 번호들, paid: 지금까지 정산한 금액, cl: 받은 클로버 }
     helperJobs: [], // 도우미가 긁는 중: { it, left, total }
     forced: { at: Math.round(E.FORCED_WIN.minSec + rand() * (E.FORCED_WIN.maxSec - E.FORCED_WIN.minSec)), done: false },
     stats: { ...ZERO_STATS },
@@ -49,7 +52,9 @@ export function defaultState() {
 }
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
-const isItem = (x) => x && typeof x === 'object' && E.TICKET_BY_ID[x.t] && Number.isFinite(x.m) && Number.isFinite(x.s);
+const isItem = (x) => x && typeof x === 'object' && E.TICKET_BY_ID[x.t] && Number.isFinite(x.s);
+// 이전 형식(결과 배수 m을 저장하던 v1)도 받아서 새 형식으로 바꾼다
+const fixItem = (x) => ({ t: x.t, s: x.s >>> 0, l: Math.max(0, num(x.l)), g: !!x.g, n: !!x.n, ...(x.f ? { f: 1 } : {}), k: Math.max(0, num(x.k)) });
 
 // 저장 데이터를 현재 형식으로 맞춘다(빠진 값은 기본값, 이상한 값은 버린다)
 export function migrate(raw) {
@@ -70,9 +75,11 @@ export function migrate(raw) {
   s.life.unlocked = Array.isArray(s.life.unlocked) ? s.life.unlocked.filter((id) => E.TICKET_BY_ID[id]) : ['t1'];
   if (!s.life.unlocked.includes('t1')) s.life.unlocked.unshift('t1');
   if (!E.TICKET_BY_ID[s.sel] || !s.life.unlocked.includes(s.sel)) s.sel = s.life.unlocked.at(-1);
-  s.stack = Array.isArray(s.stack) ? s.stack.filter(isItem).slice(0, STACK_MAX) : [];
-  s.active = isItem(s.active) ? s.active : null;
-  s.helperJobs = Array.isArray(s.helperJobs) ? s.helperJobs.filter((j) => j && isItem(j.it)).map((j) => ({ it: j.it, left: num(j.left, 5), total: num(j.total, 5) })) : [];
+  s.stack = Array.isArray(s.stack) ? s.stack.filter(isItem).map(fixItem).slice(0, STACK_MAX) : [];
+  s.active = isItem(s.active)
+    ? { ...fixItem(s.active), rv: Array.isArray(s.active.rv) ? s.active.rv.filter((i) => Number.isInteger(i)) : [], paid: num(s.active.paid), cl: num(s.active.cl) }
+    : null;
+  s.helperJobs = Array.isArray(s.helperJobs) ? s.helperJobs.filter((j) => j && isItem(j.it)).map((j) => ({ it: fixItem(j.it), left: num(j.left, 5), total: num(j.total, 5) })) : [];
   s.forced = { at: num(raw.forced?.at, d.forced.at), done: !!raw.forced?.done };
   s.stats = { ...ZERO_STATS, ...(raw.stats || {}) };
   s.ach = raw.ach && typeof raw.ach === 'object' ? raw.ach : {};
@@ -85,6 +92,7 @@ export class Game {
     this.rng = rng;
     this.handlers = {};
     this.combo = { count: 0, last: -1e9 };
+    this.cards = new Map();
   }
 
   on(evt, fn) { (this.handlers[evt] ||= []).push(fn); return this; }
@@ -109,7 +117,23 @@ export class Game {
   bulkOptions() { return E.BULK.slice(0, this.s.life.bulk + 1).map((b) => b.n); }
   isFinal() { return this.s.stage >= E.PRESTIGE.maxStage; }
   pendingCount() { return this.s.stack.length + (this.s.active ? 1 : 0) + this.s.helperJobs.length; }
-  rtp(id) { return E.effectiveRtp(this.ticket(id), this.s.life.luck, this.s.perks.prize, this.s.perks.golden); }
+  // 지금 기대값(전부 열 때 기준, 행운·보너스·황금 손 반영, 몬테카를로 표에서 읽음)
+  rtp(id) {
+    const st = CARD_STATS[id][Math.min(15, this.s.life.luck)];
+    return st.rtp * (1 + this.bonus()) * (1 + 0.01 * this.s.perks.golden);
+  }
+  stats(id) { return CARD_STATS[id][Math.min(15, this.s.life.luck)]; }
+  // 시드로 칸 구성을 다시 만든다(같은 복권은 캐시)
+  cardOf(it) {
+    const key = `${it.t}:${it.s}:${it.l}:${it.g ? 1 : 0}:${it.n ? 1 : 0}:${it.f ? 1 : 0}`;
+    let c = this.cards.get(key);
+    if (!c) {
+      c = makeCard(this.ticket(it.t), it);
+      if (this.cards.size > 300) this.cards.clear();
+      this.cards.set(key, c);
+    }
+    return c;
+  }
 
   addMoney(v) {
     this.s.money += v;
@@ -130,13 +154,16 @@ export class Game {
     this.combo.count = this.comboNow(nowMs) + 1;
     this.combo.last = nowMs;
     const tier = E.comboTier(this.combo.count);
-    const value = this.tapValue(tier.mult);
+    // 가끔 단골손님이 팁을 준다(첫 복권을 긁은 뒤부터, 탭 수입 ×10)
+    const tip = this.s.tut >= 3 && this.rng() < E.JOB.tipChance;
+    const value = this.tapValue(tier.mult) * (tip ? E.JOB.tipMult : 1);
+    if (tip) this.s.stats.tips++;
     this.s.stats.taps++;
     this.s.stats.tapIncome += value;
     if (this.combo.count > this.s.stats.maxCombo) this.s.stats.maxCombo = this.combo.count;
     this.addMoney(value);
     if (this.s.tut === 0 && this.s.money >= this.price('t1')) this.setTut(1);
-    return { value, combo: this.combo.count, tier, tierUp: tier.at > before.at };
+    return { value, combo: this.combo.count, tier, tierUp: tier.at > before.at, tip };
   }
 
   // ───────── 구매 ─────────
@@ -150,18 +177,13 @@ export class Game {
   makeOutcome(id) {
     const t = this.ticket(id);
     const s = this.s;
-    let m = E.drawTier(t, this.rng, s.life.luck);
-    let forced = false;
+    const it = { t: id, s: newSeed(), l: s.life.luck, g: this.rng() < this.goldenChance(), n: this.rng() < E.NEAR_MISS_EXTRA, k: s.life.stake };
     if (s.stage === 0 && !s.forced.done && s.playSec >= s.forced.at) {
-      m = E.forcedTierMult(t);
+      it.f = 1;
       s.forced.done = true;
-      forced = true;
+    } else if (s.stage === 0 && !s.forced.done && this.cardOf(it).m >= E.FORCED_WIN.lo) {
+      s.forced.done = true; // 이미 대박을 맛봤으면 보장은 생략
     }
-    if (m >= 20 && s.stage === 0) s.forced.done = true; // 이미 대박을 맛봤으면 보장은 생략
-    const g = this.rng() < this.goldenChance();
-    const n = m === 0 && this.rng() < E.NEAR_MISS_EXTRA;
-    const it = { t: id, m, g, n, s: newSeed(), k: s.life.stake };
-    if (forced) it.f = 1;
     return it;
   }
   buy(id, n) {
@@ -178,48 +200,100 @@ export class Game {
   }
   nextActive() {
     if (!this.s.active && this.s.stack.length) {
-      this.s.active = this.s.stack.shift();
+      this.s.active = { ...this.s.stack.shift(), rv: [], paid: 0, cl: 0 };
       this.emit('stack');
     }
     return this.s.active;
   }
-  completeActive() {
-    const it = this.s.active;
-    if (!it) return null;
-    this.s.active = null;
-    return this.resolve(it, 'me');
-  }
 
+  // 칸 하나를 연다 → 그 자리에서 바로 정산(늘어난 만큼 지급, 함정이면 차감)
+  revealCell(i) {
+    const a = this.s.active;
+    if (!a || a.rv.includes(i)) return null;
+    const t = this.ticket(a.t);
+    const card = this.cardOf(a);
+    if (!card.cells[i]) return null;
+    a.rv.push(i);
+    const now = cardAmount(t, card, new Set(a.rv), a, this.bonus());
+    const delta = now.amount - a.paid;
+    this.applyDelta(delta);
+    a.paid = now.amount;
+    const sym = card.cells[i].sym;
+    if (sym.kind === 'trap') this.s.stats.trapHits++;
+    let clover = 0;
+    if (now.clovers > a.cl) {
+      clover = now.clovers - a.cl;
+      a.cl = now.clovers;
+      this.s.clovers += clover;
+      this.s.stats.cloverCells += clover;
+      this.emit('clover', clover);
+    }
+    return { i, sym, delta, total: now.amount, m: now.m, ev: now.ev, clover };
+  }
+  applyDelta(delta) {
+    if (delta >= 0) this.addMoney(delta);
+    else this.spend(Math.min(-delta, this.s.money));
+  }
+  // 직접 긁던 복권을 끝낸다. discard면 안 연 칸은 버린다(함정 피하기).
+  completeActive(discard = false) {
+    const a = this.s.active;
+    if (!a) return null;
+    const card = this.cardOf(a);
+    if (!discard) for (const c of card.cells) if (!a.rv.includes(c.i)) this.revealCell(c.i);
+    this.s.active = null;
+    const t = this.ticket(a.t);
+    const fin = cardAmount(t, card, new Set(a.rv), a, this.bonus());
+    if (discard) this.s.stats.discards++;
+    return this.settle(a, 'me', card, fin, discard);
+  }
+  // 도우미는 전부 연다
   resolve(it, source) {
+    const t = this.ticket(it.t);
+    const card = this.cardOf(it);
+    const fin = cardAmount(t, card, null, it, this.bonus());
+    this.applyDelta(fin.amount);
+    if (fin.clovers) {
+      this.s.clovers += fin.clovers;
+      this.s.stats.cloverCells += fin.clovers;
+      this.emit('clover', fin.clovers);
+    }
+    this.s.stats.trapHits += card.cells.filter((c) => c.sym.kind === 'trap').length;
+    return this.settle(it, source, card, fin, false);
+  }
+  settle(it, source, card, fin, discard) {
     const t = this.ticket(it.t);
     const s = this.s;
     const st = s.stats;
-    const cls = E.tierClass(it.m);
-    const pay = it.m > 0 ? E.payout(t, it.m, it.g, this.bonus(), it.k) : { base: 0, extra: 0, total: 0 };
+    const m = fin.m;
+    const total = fin.amount;
+    const cls = E.tierClass(m);
     st.tickets++;
     if (source === 'helper') st.helperTickets++;
     if (it.g) st.golden++;
-    if (it.m > 0) {
+    if (fin.ev.bonus > 0) st.bonusHits++;
+    if (st[cls] !== undefined) st[cls]++;
+    if (m >= 1) {
       st.wins++;
-      st[cls]++;
       if (it.g) st.goldenWins++;
-      st.totalWon += pay.total;
       st.loseStreak = 0;
-      if (pay.total > st.best) { st.best = pay.total; st.bestName = t.name; st.bestMult = it.m * (it.g ? 2 : 1); }
-      s.life.earned += pay.total;
-      this.addMoney(pay.total);
     } else {
       st.loseStreak++;
       if (st.loseStreak > st.maxLoseStreak) st.maxLoseStreak = st.loseStreak;
     }
-    const result = { it, ticket: t, source, cls, ...pay };
+    if (total > 0) {
+      st.totalWon += total;
+      s.life.earned += total;
+    }
+    if (total > st.best) { st.best = total; st.bestName = t.name; st.bestMult = m; }
+    const near = card.near && !discard;
+    if (near) st.near++;
+    const result = { it, ticket: t, source, cls, m, total, near, discard, card, ev: fin.ev, price: E.ticketPrice(t, it.k || 0) };
     if (s.tut === 2 && source === 'me') this.setTut(3);
     this.emit('result', result);
     this.checkAch();
     return result;
   }
-  // 판 모양으로 판정된 니어미스는 화면에서 알려준다(통계용)
-  noteNear() { this.s.stats.near++; this.checkAch(); }
+  noteNear() {}
 
   // ───────── 도우미 ─────────
   helperTick(dt) {
@@ -263,12 +337,12 @@ export class Game {
       note: `${Math.round(tool.threshold * 100)}%만 긁으면 자동으로 벗겨져요`,
       cost: nextTool ? E.toolCost(L.tool) : null, max: !nextTool,
     });
-    const shift = E.luckShift(L.luck);
+    const cut = E.luckCut(L.luck);
     list.push({
       id: 'luck', icon: 'luck', name: '행운 부적', level: L.luck,
       title: `Lv.${L.luck}`,
-      desc: L.luck < E.LUCK.shiftLevels ? `당첨 확률 +${Math.round(shift * 100)}%p → +${Math.round(E.luckShift(L.luck + 1) * 100)}%p` : `당첨금 보너스 +${Math.round(E.prizeBonus(L.luck, 0) * 100)}% → +${Math.round(E.prizeBonus(L.luck + 1, 0) * 100)}%`,
-      note: L.luck < E.LUCK.shiftLevels ? '꽝이 줄고 작은 당첨이 늘어요' : '당첨 확률은 최대예요. 이제 당첨금이 늘어요',
+      desc: L.luck < E.LUCK.cutLevels ? `꽝·함정 칸 -${Math.round(cut * 100)}% → -${Math.round(E.luckCut(L.luck + 1) * 100)}%` : `당첨금 보너스 +${Math.round(E.prizeBonus(L.luck, 0) * 100)}% → +${Math.round(E.prizeBonus(L.luck + 1, 0) * 100)}%`,
+      note: L.luck < E.LUCK.cutLevels ? '돈이 나오는 칸이 늘어나요' : '꽝 줄이기는 최대예요. 이제 당첨금이 늘어요',
       cost: E.luckCost(L.luck), max: false,
     });
     if (L.helpers < E.HELPER.hireCosts.length) {

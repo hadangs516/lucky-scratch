@@ -19,6 +19,7 @@ import { PrestigeView } from './ui/prestige.js';
 import { RecordsView } from './ui/records.js';
 import { openSettings, applySettings, install } from './ui/settingsView.js';
 import { Tutorial } from './ui/tutorial.js';
+import { Owner } from './ui/owner.js';
 import { isCelebrating } from './ui/celebrate.js';
 
 const app = { tab: 'shop' };
@@ -150,6 +151,7 @@ function buildGame() {
     else switchTab('upgrade');
   });
   app.tutorial = new Tutorial(app);
+  app.owner = new Owner(app, $('#view-shop .stage'));
   app.shop.resume();
   app.displayMoney = game.s.money;
   renderTabs();

@@ -44,28 +44,38 @@ try {
   await wait(300);
   const ids = ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 't11'];
   for (const [i, id] of ids.entries()) {
-    const m = await page.evaluate((id) => {
-      const t = window.__app.game.ticket(id);
-      return t.tiers[3][0];
-    }, id);
-    await page.evaluate(({ id, m, g }) => {
+    await page.evaluate(({ id, g }) => {
       const { game, shop } = window.__app;
       game.s.sel = id;
       if (shop.cur?.scratcher) shop.cur.scratcher.destroy();
       game.s.active = null;
-      game.s.stack.unshift({ t: id, m, g, n: false, s: 1000 + Math.floor(Math.random() * 1e6), k: 0 });
+      // 보여주기 좋은 판(배수나 보너스가 있는 판)을 찾는다
+      let pick = null;
+      for (let s = 1; s < 4000 && !pick; s++) {
+        const it = { t: id, s: s * 7919, l: 3, g, n: false, k: 0 };
+        const c = game.cardOf(it);
+        const kinds = new Set(c.cells.map((x) => x.sym.kind));
+        if (c.m >= 2 && c.m < 15 && kinds.has('mult') + kinds.has('trap') + kinds.has('clover') >= 1) pick = it;
+      }
+      game.s.stack.unshift(pick || { t: id, s: 1, l: 0, g, n: false, k: 0 });
+      shop.phase = 'result';
       shop.loadNext(false);
-    }, { id, m, g: i === 2 });
+    }, { id, g: i === 2 });
     await wait(500);
     await shot(`t${String(i + 1).padStart(2, '0')}-${id}-covered`);
     await page.evaluate(() => window.__app.shop.cur.scratcher.finish(false));
-    await wait(1400);
+    await wait(1500);
     await shot(`t${String(i + 1).padStart(2, '0')}-${id}-result`);
   }
-  // 꽝 + 니어미스
+  // 니어미스 판
   await page.evaluate(() => {
     const { game, shop } = window.__app;
-    game.s.stack.unshift({ t: 't4', m: 0, g: false, n: true, s: 777, k: 0 });
+    let pick = null;
+    for (let s = 1; s < 5000 && !pick; s++) {
+      const it = { t: 't3', s: s * 31, l: 0, g: false, n: true, k: 0 };
+      if (game.cardOf(it).near) pick = it;
+    }
+    game.s.stack.unshift(pick);
     shop.phase = 'result';
     shop.loadNext(false);
   });
@@ -73,17 +83,39 @@ try {
   await page.evaluate(() => window.__app.shop.cur.scratcher.finish(false));
   await wait(1200);
   await shot('u01-near-miss');
-  // 대박 연출
+  // 함정 복권 버리기
   await page.evaluate(() => {
     const { game, shop } = window.__app;
-    game.s.stack.unshift({ t: 't3', m: 25, g: false, n: false, s: 4242, k: 0 });
+    let pick = null;
+    for (let s = 1; s < 5000 && !pick; s++) {
+      const it = { t: 't10', s: s * 13, l: 0, g: false, n: false, k: 0 };
+      if (game.cardOf(it).cells.filter((c) => c.sym.kind === 'trap').length >= 2) pick = it;
+    }
+    game.s.stack.unshift(pick);
+    shop.phase = 'result';
+    shop.loadNext(false);
+  });
+  await wait(600);
+  await page.evaluate(() => {
+    const cur = window.__app.shop.cur;
+    for (const c of cur.card.cells) if (c.sym.kind !== 'trap' && c.i % 3 === 0) cur.scratcher.openCell(cur.scratcher.cells.find((x) => x.id === c.i));
+  });
+  await wait(700);
+  await shot('u02-partial-trap');
+  await page.click('.t-discard');
+  await wait(1200);
+  await shot('u03-discard');
+  // 대박 연출(보장 판)
+  await page.evaluate(() => {
+    const { game, shop } = window.__app;
+    game.s.stack.unshift({ t: 't3', s: 4242, l: 0, g: false, n: false, f: 1, k: 0 });
     shop.phase = 'result';
     shop.loadNext(false);
   });
   await wait(500);
   await page.evaluate(() => window.__app.shop.cur.scratcher.finish(false));
-  await wait(1600);
-  await shot('u02-big-win');
+  await wait(1700);
+  await shot('u04-big-win');
   await wait(4500);
   // 탭들
   for (const tab of ['upgrade', 'prestige', 'records']) {

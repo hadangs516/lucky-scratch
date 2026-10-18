@@ -35,9 +35,8 @@ function show(r) {
       <div class="cel-box">
         <div class="cel-kicker">${r.source === 'helper' ? '도우미가 긁은 복권에서' : r.ticket.name}</div>
         <div class="cel-title">${mega ? '초대박!' : '대박!'}</div>
-        <div class="cel-mult">${r.it.m}배${r.it.g ? ' × 황금 2배' : ''}</div>
+        <div class="cel-mult">가격의 ${Math.round(r.m * 10) / 10}배${r.it.g ? ' · 황금 복권' : ''}</div>
         <div class="cel-amount">0원</div>
-        ${r.extra > 0 ? `<div class="cel-bonus">행운 보너스 +${won(r.extra)} 포함</div>` : ''}
         <div class="cel-hint">화면을 누르면 계속해요</div>
       </div>`;
     document.body.appendChild(el);

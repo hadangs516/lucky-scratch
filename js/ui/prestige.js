@@ -8,6 +8,9 @@ import * as fx from '../fx.js';
 import { onTap } from './dom.js';
 import { openModal } from './modal.js';
 import { toast } from './toast.js';
+import { Scratcher } from '../scratch.js';
+import { scratchStart, scratchStop } from '../audio.js';
+import { haptic } from '../haptics.js';
 
 export class PrestigeView {
   constructor(root, game) {
@@ -75,6 +78,53 @@ export class PrestigeView {
     if (peak) peak.textContent = `${won(p.peak)} (${pct(p.progress, 0)})`;
   }
 
+  // 환생은 버튼 하나로 끝내지 않고, 특별한 "인생역전 복권"을 긁어서 클로버를 확인하는 의식으로 한다
+  ceremony(p, last) {
+    const g = this.game;
+    const el = document.createElement('div');
+    el.className = 'rebirth';
+    el.innerHTML = `
+      <div class="rb-card">
+        <div class="rb-top">${ui('clover')}<b>${last ? '마지막 인생역전 복권' : '인생역전 복권'}</b></div>
+        <p class="rb-sub">은박을 긁으면 다음 인생이 시작돼요</p>
+        <div class="rb-play"><div class="rb-cell"><span class="rb-clover">${ui('clover')}</span><b class="rb-num">${p.clovers}</b><span class="rb-unit">네잎 클로버</span></div></div>
+        <p class="rb-next">${p.nextTicket ? `새 복권 <b>${p.nextTicket.name}</b> 등장` : last ? '무한 모드 개방' : ''}</p>
+      </div>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('in'));
+    const cellEl = el.querySelector('.rb-cell');
+    let done = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const sc = new Scratcher(el.querySelector('.rb-play'), [{ id: 0, el: cellEl }], {
+        radius: 30, threshold: 0.45, golden: true,
+        onStart: () => scratchStart(),
+        onEnd: () => scratchStop(),
+        onStroke: (pt, v, e) => { if (Math.random() < 0.4) fx.flakes(e.clientX, e.clientY, true, 2); if (v > 250) haptic.scratch(); },
+        onCell: () => {},
+        onDone: () => {
+          if (done) return;
+          done = true;
+          scratchStop();
+          const got = g.prestige();
+          if (got === false) { el.remove(); return; }
+          sfx.mega();
+          haptic.mega();
+          fx.flash('rgba(160,255,200,.7)');
+          fx.confetti(140);
+          setTimeout(() => fx.rain(50), 400);
+          el.classList.add('revealed');
+          setTimeout(() => {
+            el.classList.add('out');
+            setTimeout(() => el.remove(), 300);
+            toast(`환생 완료! 클로버 ${got}개를 받았어요`, 'ok', 2600);
+            this.render();
+          }, 2600);
+        },
+      });
+      sc.canvas.classList.add('rb-foil');
+    }));
+  }
+
   confirm() {
     const g = this.game;
     const p = g.prestigeInfo();
@@ -97,15 +147,9 @@ export class PrestigeView {
       actions: [
         { label: '아직이요', kind: 'ghost' },
         {
-          label: '환생하기', kind: 'primary', onClick: (close) => {
+          label: '환생 복권 긁기', kind: 'primary', onClick: (close) => {
             close();
-            const got = g.prestige();
-            if (got === false) return;
-            sfx.unlock();
-            fx.flash('rgba(160,255,200,.6)');
-            fx.confetti(90);
-            toast(`환생 완료! 클로버 ${got}개를 받았어요`, 'ok', 2600);
-            this.render();
+            this.ceremony(p, last);
           },
         },
       ],
