@@ -1,7 +1,7 @@
 // 오프라인 실행과 빠른 재방문을 위한 서비스 워커.
 // 같은 출처 파일: 네트워크 우선(새 버전 즉시 반영) → 실패하면 저장본.
 // 글꼴: 저장본 우선. 저장 서버(Apps Script) 요청은 건드리지 않는다.
-const VERSION = 'ls-v1';
+const VERSION = 'ls-v2';
 const CORE = ['./', 'index.html', 'css/style.css', 'js/main.js', 'manifest.webmanifest', 'icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
