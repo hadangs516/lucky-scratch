@@ -96,7 +96,7 @@ export class PrestigeView {
     let done = false;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const sc = new Scratcher(el.querySelector('.rb-play'), [{ id: 0, el: cellEl }], {
-        radius: 30, threshold: 0.45, golden: true,
+        radius: 30, strength: 0.5, golden: true,
         onStart: () => scratchStart(),
         onEnd: () => scratchStop(),
         onStroke: (pt, v, e) => { if (Math.random() < 0.4) fx.flakes(e.clientX, e.clientY, true, 2); if (v > 250) haptic.scratch(); },

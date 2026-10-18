@@ -91,6 +91,25 @@ const NOTE = (n) => 440 * 2 ** ((n - 69) / 12);
 export const sfx = {
   tap(level = 0) { tone(2300 + level * 160, { type: 'sine', dur: 0.05, vol: 0.07 }); },
   comboUp(level) { [0, 4, 7].forEach((s, i) => tone(NOTE(72 + level * 2 + s), { type: 'triangle', dur: 0.12, vol: 0.12, at: i * 0.05 })); },
+  // 계산대: "삑" 스캔(정확이면 한 음 더), 헛손질 "삐빅", 계란 깨짐, 손님 계산 완료
+  scan(perfect, level = 0) {
+    tone(1850 + level * 90, { type: 'square', dur: 0.07, vol: 0.05 });
+    if (perfect) tone(2770 + level * 120, { type: 'sine', dur: 0.08, vol: 0.06, at: 0.05 });
+  },
+  jam() {
+    tone(520, { type: 'square', dur: 0.07, vol: 0.06 });
+    tone(520, { type: 'square', dur: 0.07, vol: 0.06, at: 0.1 });
+  },
+  crack() { noise({ dur: 0.12, vol: 0.25, freq: 1200, q: 3 }); tone(300, { type: 'triangle', dur: 0.1, vol: 0.08, slide: 0.5 }); },
+  miss() { tone(260, { type: 'sine', dur: 0.12, vol: 0.06, slide: 0.7 }); },
+  register(perfect) {
+    noise({ dur: 0.05, vol: 0.2, freq: 4000, q: 2 });
+    tone(NOTE(88), { type: 'triangle', dur: 0.08, vol: 0.1, at: 0.05 });
+    tone(NOTE(perfect ? 96 : 91), { type: 'triangle', dur: 0.16, vol: 0.1, at: 0.11 });
+    coinsSound(perfect ? 8 : 3, 0.25);
+  },
+  // 은박이 열리기 직전 얇아질 때 사각사각
+  thin() { noise({ dur: 0.04, vol: 0.06, freq: 5200, q: 4 }); },
   click() { tone(900, { type: 'triangle', dur: 0.05, vol: 0.08 }); },
   buy() {
     noise({ dur: 0.06, vol: 0.25, freq: 3500, q: 2 });

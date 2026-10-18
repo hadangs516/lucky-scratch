@@ -133,9 +133,20 @@ const ITEMS = [
   `<path d="M8 18h32l-4 20H12z" fill="#e5432f" stroke="#8f1d10" stroke-width="2"/><path d="M12 14c4-4 20-4 24 0" stroke="#ffc531" stroke-width="3" fill="none"/><text x="24" y="31" text-anchor="middle" font-size="9" font-weight="900" fill="#fff" font-family="sans-serif">라면</text>`,
   `<path d="M24 7L41 38H7z" fill="#fff" stroke="#3a2a1c" stroke-width="2"/><path d="M14 30h20l3 8H11z" fill="#2b2b38"/><circle cx="24" cy="22" r="3" fill="#e5432f"/>`,
   `<rect x="14" y="8" width="20" height="32" rx="5" fill="#3aa655" stroke="#1d6e35" stroke-width="2"/><rect x="14" y="17" width="20" height="10" fill="#ffd84a"/><rect x="19" y="5" width="10" height="4" rx="1" fill="#9aa7b4"/>`,
+  `<rect x="9" y="14" width="30" height="24" rx="4" fill="#ffb03a" stroke="#a65a00" stroke-width="2"/><path d="M9 22h30" stroke="#a65a00" stroke-width="2"/><text x="24" y="34" text-anchor="middle" font-size="8.5" font-weight="900" fill="#5a2c00" font-family="sans-serif">과자</text>`,
+  `<rect x="13" y="12" width="22" height="28" rx="4" fill="#e8f4ff" stroke="#5a7a99" stroke-width="2"/><rect x="13" y="20" width="22" height="9" fill="#ff6fb1"/><rect x="18" y="8" width="12" height="5" rx="1.5" fill="#ff6fb1"/>`,
 ];
+// 계산대 특수 물건
+const JOB_SPECIAL = {
+  egg: `<rect x="6" y="20" width="36" height="18" rx="4" fill="#d8c3a0" stroke="#8a6a40" stroke-width="2"/><ellipse cx="15" cy="21" rx="6" ry="7.5" fill="#fff6e6" stroke="#c9b08a" stroke-width="1.5"/><ellipse cx="24" cy="20" rx="6" ry="7.5" fill="#fff6e6" stroke="#c9b08a" stroke-width="1.5"/><ellipse cx="33" cy="21" rx="6" ry="7.5" fill="#fff6e6" stroke="#c9b08a" stroke-width="1.5"/>`,
+  pair: `<rect x="5" y="14" width="18" height="26" rx="3" fill="#5aa9ff" stroke="#2d6fd0" stroke-width="2"/><rect x="25" y="14" width="18" height="26" rx="3" fill="#5aa9ff" stroke="#2d6fd0" stroke-width="2"/><rect x="3" y="24" width="42" height="6" rx="2" fill="#ffd84a" stroke="#a67c00" stroke-width="1.5"/>`,
+  gift: `<rect x="6" y="13" width="36" height="24" rx="4" fill="#ffd84a" stroke="#a67c00" stroke-width="2"/><rect x="6" y="13" width="9" height="24" fill="#e5432f"/><text x="29" y="29" text-anchor="middle" font-size="8.5" font-weight="900" fill="#7a4a00" font-family="sans-serif">상품권</text><circle cx="10.5" cy="25" r="2.5" fill="#fff"/>`,
+};
 export function item(i) {
   return svg(ITEMS[i % ITEMS.length], 'item');
+}
+export function jobItem(kind, i) {
+  return kind in JOB_SPECIAL ? svg(JOB_SPECIAL[kind], 'item') : item(i);
 }
 
 export function ui(name, cls = '') {

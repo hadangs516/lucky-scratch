@@ -1,4 +1,4 @@
-// 처음 1분 안내: 알바 → 구매 → 긁기 → 강화 탭
+// 처음 1분 안내: 계산대 알바 → 구매 → 긁기 → 강화 탭
 import { won } from '../format.js';
 
 export class Tutorial {
@@ -21,19 +21,19 @@ export class Tutorial {
     const { game, shop, tab } = this.app;
     const s = game.s;
     if (tab !== 'shop' && s.tut < 3) return null;
-    if (s.tut === 0) return { target: '#job-btn', text: '알바 버튼을 연타해서 돈을 모아요!', sub: `1,000원이면 첫 복권을 살 수 있어요 · 지금 ${won(s.money)}` };
+    if (s.tut === 0) return { target: '#job-btn', text: '바코드가 빨간 선에 닿는 순간 눌러요!', sub: `아무 때나 누르면 삐빅! · 1,000원이면 첫 복권 · 지금 ${won(s.money)}` };
     if (s.tut === 1) {
-      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '손가락으로 은박을 문질러 긁어요!', sub: '칸을 열 때마다 바로 돈이 들어와요', finger: true };
+      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '은박을 여러 번 문질러 긁어요!', sub: '은박이 얇아지면 그림이 비치고, 칸이 열리면 바로 돈이 들어와요', finger: true };
       return { target: '#buy-btn', text: '1,000원이 모였어요! 첫 복권을 사 볼까요?', sub: '' };
     }
     if (s.tut === 2) {
-      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '손가락으로 은박을 문질러 긁어요!', sub: '칸을 열 때마다 바로 돈이 들어와요', finger: true };
+      if (shop.phase === 'scratch') return { target: '.stage-deck .t-play', text: '은박을 여러 번 문질러 긁어요!', sub: '은박이 얇아지면 그림이 비치고, 칸이 열리면 바로 돈이 들어와요', finger: true };
       return null;
     }
     if (s.tut === 3 && tab === 'shop' && shop.phase !== 'scratch') {
       // 강화 탭 안내는 잠깐만 보여주고 스스로 사라진다(플레이를 가리지 않게)
       if (!this.t3) this.t3 = setTimeout(() => game.setTut(4), 7000);
-      return { target: '.tab[data-tab="upgrade"]', text: '강화 탭이 열렸어요!', sub: '승진하면 알바 수입이 늘어나요' };
+      return { target: '.tab[data-tab="upgrade"]', text: '강화 탭이 열렸어요!', sub: '승진하면 계산 수입이 늘고, 긁개를 바꾸면 은박이 잘 벗겨져요' };
     }
     return null;
   }

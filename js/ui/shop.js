@@ -3,7 +3,7 @@ import * as E from '../economy.js';
 import { renderTicket, THEMES, themeStyle, symIcon, symLabel } from '../ticketView.js';
 import { Scratcher } from '../scratch.js';
 import { won, short, shortWon, pct, oneIn } from '../format.js';
-import { symbol, ui, tool as toolIcon, item as itemIcon } from '../icons.js';
+import { symbol, ui, tool as toolIcon } from '../icons.js';
 import { sfx, scratchStart, scratchSpeed, scratchStop } from '../audio.js';
 import { haptic } from '../haptics.js';
 import * as fx from '../fx.js';
@@ -11,6 +11,7 @@ import { $, onTap } from './dom.js';
 import { openModal } from './modal.js';
 import { celebrate } from './celebrate.js';
 import { toast } from './toast.js';
+import { JobView } from './job.js';
 
 export class ShopView {
   constructor(root, game, app) {
@@ -38,18 +39,13 @@ export class ShopView {
         <div class="qty" role="group" aria-label="구매 수량"></div>
         <button class="btn btn-buy" id="buy-btn"><span class="buy-main">구매</span><span class="buy-sub"></span></button>
       </div>
-      <button class="job-btn" id="job-btn" aria-label="알바하기(연타)">
-        <span class="job-ic">${ui('job')}</span>
-        <span class="job-text"><b class="job-title">편의점 알바</b><small class="job-rank"></small></span>
-        <span class="job-val"></span>
-        <span class="combo"><span class="combo-fill"></span><span class="combo-label"></span></span>
-      </button>`;
+      <div class="job" id="job-btn" role="button" tabindex="0" aria-label="편의점 계산대: 바코드가 빨간 선에 닿을 때 누르세요"></div>`;
     this.stage = $('.stage', this.root);
     this.deck = $('.stage-deck', this.root);
     this.picker = $('.picker', this.root);
     this.qtyEl = $('.qty', this.root);
     this.buyBtn = $('#buy-btn', this.root);
-    this.jobBtn = $('#job-btn', this.root);
+    this.job = new JobView($('#job-btn', this.root), this.game, this.app);
     this.helpersEl = $('.helpers', this.root);
     this.stackBadge = $('.stack-badge', this.root);
     this.cursor = document.createElement('div');
@@ -59,23 +55,27 @@ export class ShopView {
 
     onTap(this.buyBtn, () => this.buy());
     onTap($('.odds-btn', this.root), () => this.showOdds(this.game.s.sel));
-    this.bindJob();
     this.renderPicker();
     this.renderQty();
     this.renderBuy();
-    this.renderJob();
     new ResizeObserver(() => this.fit()).observe(this.stage);
     this.game.on('stack', () => { this.renderStackBadge(); this.renderBuy(); });
     this.game.on('money', () => { this.renderBuy(); this.renderPickerAfford(); });
     this.game.on('upgrade', (id) => {
-      if (id === 'job') this.renderJob();
+      if (id === 'job') this.job.render();
       if (id === 'bulk') this.renderQty();
-      if (id === 'tool' && this.cur?.scratcher) { const t = this.game.tool(); this.cur.scratcher.setTool(t.radius, t.threshold); }
+      if (id === 'tool' && this.cur?.scratcher) this.cur.scratcher.setTool(...this.scratchTool(this.cur.ticket));
       if (id === 'stake') { this.renderPicker(); this.renderBuy(); this.showIdle(); }
     });
     this.game.on('unlock', () => { this.renderPicker(); this.renderBuy(); });
     this.game.on('prestige', () => this.reset());
-    this.game.on('perk', () => this.renderJob());
+    this.game.on('perk', () => this.job.render());
+    // 컴퓨터에서는 스페이스바로도 계산할 수 있다
+    addEventListener('keydown', (e) => {
+      if (e.code !== 'Space' || e.repeat || this.app.tab !== 'shop' || document.querySelector('.modal') || /INPUT|TEXTAREA|BUTTON/.test(document.activeElement?.tagName)) return;
+      e.preventDefault();
+      this.job.onTap(e);
+    });
   }
 
   reset() {
@@ -85,7 +85,7 @@ export class ShopView {
     this.renderPicker();
     this.renderQty();
     this.renderBuy();
-    this.renderJob();
+    this.job.render();
     this.resume();
   }
 
@@ -196,7 +196,7 @@ export class ShopView {
     if (!c.ok) {
       sfx.error();
       fx.shake(this.buyBtn, 0.5);
-      if (c.short) toast(`${won(c.short)}이 부족해요. 알바 버튼을 연타해 보세요!`, 'warn', 1600);
+      if (c.short) toast(`${won(c.short)}이 부족해요. 아래 계산대에서 알바해 보세요!`, 'warn', 1600);
       else toast(c.why, 'warn');
       return;
     }
@@ -262,14 +262,15 @@ export class ShopView {
     // 레이아웃이 잡힌 뒤 은박을 덮는다
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (this.cur !== cur) return;
-      const t = this.game.tool();
+      const [radius, strength] = this.scratchTool(ticket);
       cur.scratcher = new Scratcher(view.play, view.cellEls, {
-        radius: t.radius, threshold: t.threshold, golden: it.g,
+        radius, strength, openAt: E.FOIL.openAt, golden: it.g,
         onStart: (e) => this.toolDown(e),
         onEnd: () => this.toolUp(),
         onHover: (e) => this.toolHover(e),
         onLeave: () => { if (!cur.scratcher?.drawing) this.cursor.hidden = true; },
-        onStroke: (p, v, e) => this.onStroke(cur, p, v, e),
+        onStroke: (p, v, e, worn) => this.onStroke(cur, p, v, e, worn),
+        onMove: (p, v, e) => this.onMove(cur, v, e),
         onCell: (id, revealed, silent) => this.onCell(cur, id, silent),
         onDone: () => this.onDone(cur),
       });
@@ -284,6 +285,12 @@ export class ShopView {
     this.renderStackBadge();
   }
 
+  // 도구 힘은 복권 은박 두께만큼 약해진다
+  scratchTool(ticket) {
+    const t = this.game.tool();
+    return [t.radius, E.foilStrength(t.strength, E.foilThickness(ticket))];
+  }
+
   setTotal(cur, total) {
     const el = cur.view.totalEl;
     el.textContent = (total < 0 ? '−' : total > 0 ? '+' : '') + won(Math.abs(total));
@@ -296,6 +303,7 @@ export class ShopView {
   }
 
   toolDown(e) {
+    this.job.pause();
     this.cursor.innerHTML = toolIcon(this.game.tool().stage);
     this.cursor.hidden = false;
     this.cursor.classList.add('down');
@@ -319,12 +327,25 @@ export class ShopView {
     // 손가락에 가리지 않게 살짝 위에 그린다
     this.cursor.style.transform = `translate(${x - size / 2}px, ${y - size * 0.95}px) rotate(${Math.max(-25, Math.min(25, vx * 0.02))}deg)`;
   }
-  onStroke(cur, p, v, e) {
+  onMove(cur, v, e) {
     this.moveCursor(e.clientX, e.clientY, e.movementX ? e.movementX * 40 : 0);
     scratchSpeed(v);
-    cur.dist = (cur.dist || 0) + 1;
-    if (cur.dist % 3 === 0) fx.flakes(e.clientX, e.clientY, cur.it.g, 2);
+  }
+  // 은박이 깎일 때: 깎인 양만큼 부스러기, 열리기 직전 칸은 사각사각 소리와 떨림
+  onStroke(cur, p, v, e, worn) {
+    if (!worn) return;
+    cur.wornAcc = (cur.wornAcc || 0) + worn;
+    if (cur.wornAcc > 18) {
+      fx.flakes(e.clientX, e.clientY, cur.it.g, Math.min(4, 1 + Math.floor(cur.wornAcc / 40)));
+      cur.wornAcc = 0;
+    }
     if (v > 250) haptic.scratch();
+    const sc = cur.scratcher;
+    if (!sc) return;
+    for (const c of cur.view.cellEls) {
+      if (c.el.classList.contains('revealed') || c.el.classList.contains('thin')) continue;
+      if (sc.cellWear(c.id) > 0.7) { c.el.classList.add('thin'); sfx.thin(); }
+    }
   }
 
   // 칸이 열리는 순간: 바로 정산하고 그 자리에서 터뜨린다
@@ -498,78 +519,10 @@ export class ShopView {
     } else if (r.total < 0) fx.floatText(x, y + 14, `−${shortWon(-r.total)}`, 'plus small trap');
   }
 
-  // ───────── 알바 ─────────
-  bindJob() {
-    const btn = this.jobBtn;
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      const r = this.game.tap(performance.now());
-      const level = E.COMBO.tiers.indexOf(r.tier);
-      sfx.tap(level);
-      fx.floatText(e.clientX + (Math.random() - 0.5) * 30, e.clientY - 24, `+${short(r.value)}`, r.tip ? 'tip' : 'tap');
-      this.flyItem(e.clientX, e.clientY);
-      if (r.tip) {
-        sfx.coin(6, 4);
-        haptic.small();
-        fx.coins(e.clientX, e.clientY - 20, 8, 0.8);
-        this.app.owner?.tip(r.value);
-      }
-      btn.classList.remove('press');
-      void btn.offsetWidth;
-      btn.classList.add('press');
-      if (r.tierUp) {
-        sfx.comboUp(level);
-        haptic.combo();
-        btn.classList.add('tier-up');
-        setTimeout(() => btn.classList.remove('tier-up'), 400);
-      }
-      this.renderCombo();
-      this.app.tutorial?.update();
-    });
-    btn.addEventListener('contextmenu', (e) => e.preventDefault());
-  }
-  // 스캔한 물건이 버튼 위로 튀어 오른다(가볍게, 동시에 6개까지)
-  flyItem(x, y) {
-    if (fx.isReduced()) return;
-    this.flying = (this.flying || 0);
-    if (this.flying >= 6) return;
-    this.flying++;
-    const el = document.createElement('div');
-    el.className = 'fly-item';
-    el.innerHTML = itemIcon(Math.floor(Math.random() * 4));
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
-    el.style.setProperty('--dx', (Math.random() - 0.5) * 140 + 'px');
-    el.style.setProperty('--rot', (Math.random() - 0.5) * 120 + 'deg');
-    document.body.appendChild(el);
-    setTimeout(() => { el.remove(); this.flying--; }, 700);
-  }
-
-  renderJob() {
-    const s = this.game.s;
-    $('.job-rank', this.jobBtn).textContent = `${E.JOB_RANKS[E.jobRankIndex(s.life.job)]} · Lv.${s.life.job}`;
-    this.renderCombo();
-  }
-  renderCombo() {
-    const now = performance.now();
-    const c = this.game.comboNow(now);
-    const tier = E.comboTier(c);
-    const v = this.game.tapValue(tier.mult);
-    const vEl = $('.job-val', this.jobBtn);
-    const txt = `+${short(v)}원`;
-    if (vEl.textContent !== txt) vEl.textContent = txt;
-    $('.combo-fill', this.jobBtn).style.transform = `scaleX(${Math.min(1, c / 100)})`;
-    const label = c > 0 ? `콤보 ${c}${tier.mult > 1 ? ` · ×${tier.mult} ${tier.label}` : ''}` : '연타하면 콤보 보너스!';
-    const lEl = $('.combo-label', this.jobBtn);
-    if (lEl.textContent !== label) lEl.textContent = label;
-    this.jobBtn.classList.toggle('fever', tier.mult >= 2);
-    this.jobBtn.dataset.tier = E.COMBO.tiers.indexOf(tier);
-  }
-
   // 매 프레임
-  frame() {
+  frame(now = performance.now()) {
     this.renderHelpers();
-    if (this.game.combo.count && performance.now() - this.game.combo.last > E.COMBO.timeout * 1000 - 50) this.renderCombo();
+    this.job.frame(now);
   }
 
   // ───────── 확률표·해금 ─────────

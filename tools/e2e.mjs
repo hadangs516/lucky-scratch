@@ -78,16 +78,33 @@ try {
   assert.match(await p2.textContent('.auth-err'), /이미 있는 아이디/);
   ok('중복 아이디 가입 거절');
 
-  // 4. 알바 → 첫 복권
+  // 4. 계산대 알바 → 첫 복권(바코드가 선에 닿을 때 누르는 사람을 흉내 낸다)
+  await G(() => window.__app.game.s.tut, null);
   const jb = await page.locator('#job-btn').boundingBox();
-  let taps = 0;
-  while ((await G(() => window.__app.game.s.money)) < 1000) {
-    await page.touchscreen.tap(jb.x + jb.width / 2, jb.y + jb.height / 2);
-    taps++;
-  }
-  assert.ok(taps >= 70 && taps <= 100, `첫 복권까지 ${taps}회`);
+  assert.match(await page.textContent('#job-btn .belt-msg'), /눌러서 계산 시작/);
+  await page.touchscreen.tap(jb.x + jb.width / 2, jb.y + jb.height - 20); // 시작
+  // 광클은 "삐빅"
+  for (let i = 0; i < 4; i++) await page.touchscreen.tap(jb.x + jb.width / 2, jb.y + jb.height - 20);
+  assert.ok(await page.locator('#job-btn .judge.jam').count() > 0, '헛손질 표시');
+  assert.equal(await G(() => window.__app.game.register.combo), 0);
+  await wait(500);
+  await G(() => {
+    const el = document.getElementById('job-btn');
+    window.__bot = true;
+    const loop = () => {
+      if (!window.__bot) return;
+      const reg = window.__app.game.register;
+      const it = reg.items.filter((x) => x.res === null).sort((a, b) => a.hit - b.hit)[0];
+      if (!reg.paused && it && performance.now() >= it.hit + 30) el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+  await page.waitForFunction(() => window.__app.game.s.money >= 1000, null, { timeout: 90000 });
+  const scans = await G(() => { window.__bot = false; return window.__app.game.s.stats.taps; });
+  assert.ok(scans >= 10 && scans <= 45, `첫 복권까지 ${scans}개`);
   assert.equal(await G(() => window.__app.game.s.tut), 1);
-  ok(`첫 복권까지 탭 ${taps}회(70~100)`);
+  ok(`계산대: 광클은 "삐빅", 타이밍 맞춰 바코드 ${scans}개로 첫 복권`);
   // 강화 탭은 아직 잠김
   await page.click('.tab[data-tab="upgrade"]');
   assert.match(await toastText(), /첫 복권을 긁으면 열려요/);
@@ -209,10 +226,10 @@ try {
 
   // 12. 도우미가 쌓인 복권을 긁는다
   await page.click('.tab[data-tab="shop"]');
-  await G(() => { const g = window.__app.game; g.s.life.helpers = 1; g.s.life.helperSpeed = 8; g.s.life.bulk = 1; g.s.qty = 5; g.s.money = 1e6; g.emit('money', g.s.money); window.__app.shop.renderQty(); window.__app.shop.renderBuy(); });
+  await G(() => { const g = window.__app.game; g.s.life.helpers = 1; g.s.life.helperSpeed = 6; g.s.life.bulk = 1; g.s.qty = 5; g.s.money = 1e6; g.emit('money', g.s.money); window.__app.shop.renderQty(); window.__app.shop.renderBuy(); });
   const t0 = await G(() => window.__app.game.s.stats.helperTickets);
   await page.click('#buy-btn');
-  await wait(5600);
+  await wait(7800); // 도우미 최소 7초(직접 긁기보다 느리게)
   assert.ok((await G(() => window.__app.game.s.stats.helperTickets)) > t0, '도우미가 1장 이상 긁음');
   await shot('08-helper');
   ok('도우미 자동 긁기');

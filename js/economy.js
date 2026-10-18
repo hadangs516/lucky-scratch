@@ -30,35 +30,35 @@ export const TICKETS = [
     match: { sym: 'pouch', need: 3, bonus: 12 },
   },
   {
-    id: 't2', name: '네잎클로버', price: 6_000, cells: 8, cols: 4, unlockCost: 15_000, stageReq: 0, rtp: 1.08, maxMult: 25,
+    id: 't2', name: '네잎클로버', price: 6_000, cells: 8, cols: 4, unlockCost: 8_000, stageReq: 0, rtp: 1.08, maxMult: 25,
     blurb: '잎이 많을수록 큰돈! ×2 칸은 이 복권 전체를 두 배로.', blank: 'leaf',
     w0: 62.07,
     syms: [v('l1', 0.05, 30, 'leaf1', 0), v('l2', 0.1, 24, 'leaf2', 1), v('l3', 0.25, 14, 'leaf3', 2), v('bug', 0.5, 7, 'ladybug', 3), v('l5', 1, 3, 'leaf5', 4), v('rain', 8, 0.18, 'rainbow', 6), mult(2, 1.6), v('clover4', 0.25, 6, 'clover', 3)],
     match: { sym: 'clover4', need: 3, bonus: 15 },
   },
   {
-    id: 't3', name: '럭키 세븐', price: 40_000, cells: 9, cols: 3, unlockCost: 120_000, stageReq: 0, rtp: 1.11, maxMult: 30,
+    id: 't3', name: '럭키 세븐', price: 40_000, cells: 9, cols: 3, unlockCost: 50_000, stageReq: 0, rtp: 1.11, maxMult: 30,
     blurb: '과일은 조금, BAR는 많이. 7이 3개면 대박!', blank: 'reel',
     w0: 96.34,
     syms: [v('cherry', 0.05, 28, 'cherry', 0), v('lemon', 0.1, 22, 'lemon', 1), v('bell', 0.25, 13, 'bell', 2), v('bar', 0.75, 5, 'bar', 3), v('bar3', 2, 1.4, 'bar3', 5), mult(2, 1.4), v('jack', 12, 0.12, 'jackpot', 6), v('seven', 0.5, 5.5, 'seven', 4)],
     match: { sym: 'seven', need: 3, bonus: 20 },
   },
   {
-    id: 't4', name: '열쇠와 금고', price: 250_000, cells: 9, cols: 3, unlockCost: 900_000, stageReq: 0, rtp: 1.14, maxMult: 40,
+    id: 't4', name: '열쇠와 금고', price: 250_000, cells: 9, cols: 3, unlockCost: 600_000, stageReq: 0, rtp: 1.14, maxMult: 40,
     blurb: '빨간 경보기는 벌금! 비치면 버려도 돼요. 열쇠 3개면 금고가 열려요.', blank: 'dust',
     w0: 80.07,
     syms: [v('coin', 0.1, 26, 'coin', 1), v('cash', 0.3, 15, 'cash', 2), v('gold', 1, 5, 'goldbar', 4), v('bag', 3, 1.2, 'moneybag', 5), v('vault', 15, 0.1, 'vault', 6), mult(2, 1), trap('alarm', 0.6, 7, 'alarm'), v('key', 0.25, 5.5, 'key', 3), clover(0.12)],
     match: { sym: 'key', need: 3, bonus: 25 },
   },
   {
-    id: 't5', name: '주사위 대박', price: 1_500_000, cells: 8, cols: 4, unlockCost: 6_000_000, stageReq: 0, rtp: 1.17, maxMult: 50,
+    id: 't5', name: '주사위 대박', price: 1_500_000, cells: 8, cols: 4, unlockCost: 4_000_000, stageReq: 0, rtp: 1.17, maxMult: 50,
     blurb: '눈이 클수록 큰돈. ×2·×3 칸이 겹치면 폭발! 6이 3개면 보너스.', blank: 'dice0',
     w0: 86.57,
     syms: [v('d1', 0.05, 26, 'dice1', 0), v('d2', 0.1, 22, 'dice2', 1), v('d3', 0.25, 14, 'dice3', 2), v('d4', 0.5, 8, 'dice4', 3), v('d5', 1.5, 2.5, 'dice5', 4), mult(2, 1.5), mult(3, 0.5), v('dgold', 15, 0.1, 'dicegold', 6), v('d6', 0.5, 6, 'dice6', 5), clover(0.12)],
     match: { sym: 'd6', need: 3, bonus: 30 },
   },
   {
-    id: 't6', name: '보석 배수', price: 10_000_000, cells: 9, cols: 3, unlockCost: 45_000_000, stageReq: 0, rtp: 1.2, maxMult: 50,
+    id: 't6', name: '보석 배수', price: 10_000_000, cells: 9, cols: 3, unlockCost: 30_000_000, stageReq: 0, rtp: 1.2, maxMult: 50,
     blurb: '가짜 보석(회색)은 벌금! ×5 칸이 숨어 있어요. 다이아 3개면 보너스.', blank: 'rock',
     w0: 76.19,
     syms: [v('ruby', 0.1, 26, 'ruby', 1), v('emer', 0.3, 15, 'emerald', 2), v('sapph', 1, 5, 'sapphire', 4), mult(2, 1.4), mult(5, 0.25), trap('fake', 0.8, 5, 'fakegem'), v('crownjewel', 20, 0.08, 'crownjewel', 6), v('dia', 0.5, 5.5, 'diamond', 5), clover(0.12)],
@@ -126,18 +126,41 @@ export const FORCED_WIN = { minSec: 600, maxSec: 1800, lo: 15, hi: 25 };
 // 니어미스: 손해 판 중 자연 발생분에 더해 10%를 "보너스 그림 2개" 판으로 만든다.
 export const NEAR_MISS_EXTRA = 0.10;
 
-// ───────────────────────── 본업(알바) ─────────────────────────
-// 탭 수입은 레벨마다 ×1.3, 비용은 ×1.45 → 갈수록 효율이 떨어져 후반엔 복권이 주 수입원이 된다.
-// 설계 기준: "지금 최신 복권 1장 ≈ 탭 70~100회".
+// ───────────────────────── 본업(알바): 편의점 계산대 ─────────────────────────
+// 컨베이어로 물건이 흘러오고, 바코드가 스캐너 선에 닿을 때 누르면 계산된다(타이밍 게임).
+// 아무 때나 누르면 "삐빅" 하고 스캐너가 잠깐 멈추고 연속 계산이 끊긴다 → 광클로는 못 번다.
+// 1개당 수입은 레벨마다 ×1.3, 비용은 ×1.45 → 갈수록 효율이 떨어져 후반엔 복권이 주 수입원이 된다.
 export const JOB = {
-  baseTap: 10,
+  baseTap: 25, // 바코드 1개 기본 수입(정확 판정 전)
   growth: 1.3,
   costBase: 150,
   costGrowth: 1.45,
   rankEvery: 3, // 3레벨마다 직급 승진(호칭 변경)
-  tipChance: 0.025, // 탭마다 단골손님 팁 확률
-  tipMult: 10,
 };
+// 계산대 타이밍(밀리초)과 판정 배수
+export const REGISTER = {
+  perfectMs: 70, // 스캐너 선 ±70ms: 정확
+  goodMs: 150, // ±150ms: 좋음
+  perfectMult: 1.5,
+  goodMult: 1,
+  jamMs: 450, // 헛손질하면 스캐너가 이만큼 먹통
+  travelMs: 1900, // 오른쪽 끝에서 스캐너까지 걸리는 시간(속도 1배)
+  gap: [560, 1000], // 물건 사이 간격(ms, 속도 1배)
+  customerGap: 900, // 손님 사이 간격
+  basket: [3, 6], // 손님 한 명의 물건 수
+  speedMax: 1.5, // 연속 계산이 쌓일수록 빨라진다(60연속에 최대)
+  speedAt: 60,
+  cleanBonus: 0.2, // 한 손님을 실수 없이 계산하면 그 손님 금액 +20%
+  perfectBonus: 1, // 전부 "정확"이면 +100%(단골 팁)
+  idleMisses: 2, // 손대지 않은 채 연달아 놓치면 계산대를 멈춘다
+};
+// 직급이 오르면 새 물건이 섞여 나온다
+export const JOB_ITEMS = [
+  { kind: 'item', mult: 1, rank: 0, w: 1 },
+  { kind: 'egg', mult: 2, rank: 1, w: 0.12 }, // 계란: "정확"이 아니면 깨진다
+  { kind: 'pair', mult: 1, rank: 2, w: 0.1 }, // 묶음: 바코드 두 개를 연달아
+  { kind: 'gift', mult: 8, rank: 3, w: 0.03 }, // 상품권: 드물고 크다
+];
 export const JOB_RANKS = [
   '신입 알바', '주말 알바', '야간 알바', '베테랑 알바', '부매니저', '매니저',
   '부점장', '점장', '지점장', '본부장', '상무', '전무', '부사장', '사장', '회장',
@@ -152,32 +175,47 @@ export function jobCost(level) {
   return roundNice(JOB.costBase * JOB.costGrowth ** level);
 }
 
-// 광클 콤보. 마지막 탭 후 timeout초 안에 다시 누르면 콤보가 이어진다.
+// 연속 계산. 놓치거나 헛손질하면 0으로 돌아간다.
 export const COMBO = {
-  timeout: 1.2,
   tiers: [
     { at: 0, mult: 1, label: '' },
-    { at: 20, mult: 1.2, label: '좋아요' },
-    { at: 50, mult: 1.5, label: '손이 빨라요!' },
-    { at: 100, mult: 2, label: '피버 타임!' },
+    { at: 10, mult: 1.2, label: '손에 익었어요' },
+    { at: 25, mult: 1.5, label: '능숙해요!' },
+    { at: 50, mult: 2, label: '계산의 신!' },
   ],
 };
+export function registerSpeed(combo) {
+  return 1 + (REGISTER.speedMax - 1) * Math.min(1, combo / REGISTER.speedAt);
+}
 export function comboTier(count) {
   let t = COMBO.tiers[0];
   for (const x of COMBO.tiers) if (count >= x.at) t = x;
   return t;
 }
 
-// ───────────────────────── 긁개(도구) ─────────────────────────
-// 단계마다 3레벨. 레벨이 오를수록 반경이 커지고, 단계가 오르면 도구가 진화한다.
-// threshold: 한 칸의 이만큼만 긁으면 그 칸이 통째로 열린다.
+// ───────────────────────── 은박과 긁개(도구) ─────────────────────────
+// 은박은 한 번에 벗겨지지 않는다. 한 번 지나갈 때마다 strength만큼 얇아지고(그림이 점점 비친다),
+// 칸에 남은 은박이 FOIL.openAt 아래로 내려가면 그 칸이 "툭" 열린다.
+// 비싼 복권일수록 은박이 두껍다(thick). 두께 T면 한 번에 벗겨지는 양이 1-(1-s)^(1/T)로 준다.
+export const FOIL = {
+  openAt: 0.35,
+  thickBase: 1, // 1번 복권 두께
+  thickStep: 0.1, // 복권 등급마다 두께 +0.1
+};
+export function foilThickness(ticket) {
+  return FOIL.thickBase + FOIL.thickStep * Math.max(0, TICKETS.indexOf(ticket));
+}
+export function foilStrength(strength, thick) {
+  return 1 - (1 - strength) ** (1 / thick);
+}
+// 단계마다 3레벨. 레벨이 오르면 폭과 힘이 조금씩, 단계가 오르면 도구가 진화한다.
 export const TOOL_STAGES = [
-  { name: '10원 동전', radius: 16, threshold: 0.5 },
-  { name: '500원 동전', radius: 21, threshold: 0.45 },
-  { name: '포인트 카드', radius: 27, threshold: 0.4 },
-  { name: '전용 긁개', radius: 35, threshold: 0.34 },
-  { name: '황금 긁개', radius: 45, threshold: 0.28 },
-  { name: '전동 긁개', radius: 58, threshold: 0.2 },
+  { name: '10원 동전', radius: 14, strength: 0.37 },
+  { name: '500원 동전', radius: 17, strength: 0.43 },
+  { name: '포인트 카드', radius: 20, strength: 0.49 },
+  { name: '전용 긁개', radius: 24, strength: 0.56 },
+  { name: '황금 긁개', radius: 28, strength: 0.63 },
+  { name: '전동 긁개', radius: 33, strength: 0.7 },
 ];
 export const TOOL_SUBLEVELS = 3;
 export const TOOL_MAX_LEVEL = TOOL_STAGES.length * TOOL_SUBLEVELS - 1;
@@ -187,7 +225,12 @@ export function toolStage(level) {
 export function toolStats(level) {
   const st = TOOL_STAGES[toolStage(level)];
   const sub = level % TOOL_SUBLEVELS;
-  return { name: st.name, stage: toolStage(level), radius: st.radius * (1 + 0.1 * sub), threshold: st.threshold };
+  return { name: st.name, stage: toolStage(level), radius: st.radius * (1 + 0.07 * sub), strength: Math.min(0.9, st.strength + 0.025 * sub) };
+}
+// 한 지점을 몇 번 문질러야 열리는지(대략). 시뮬레이터와 강화 설명에 쓴다.
+// 긁기 엔진은 반경의 절반마다 끊어 칠하므로 한 번 지나가면 약 1.25번 깎인다.
+export function rubsNeeded(strength, thick) {
+  return Math.log(FOIL.openAt) / (1.25 * Math.log(1 - foilStrength(strength, thick)));
 }
 export function toolCost(level) {
   return roundNice(1_500 * 2.7 ** level);
@@ -218,10 +261,10 @@ export const HELPER = {
   hireCosts: [20_000, 3_000_000, 300_000_000],
   baseTime: 18, // 한 장 긁는 데 걸리는 초
   speedGrowth: 0.85,
-  minTime: 5,
+  minTime: 7,
   speedCostBase: 25_000,
   speedCostGrowth: 2.4,
-  maxSpeedLevel: 8, // 8레벨이면 최소 시간(5초)에 도달
+  maxSpeedLevel: 6, // 6레벨이면 최소 시간(7초)에 도달. 직접 긁는 쪽이 늘 더 빠르게 둔다
 };
 export function helperTime(speedLevel, perkLevel = 0) {
   return Math.max(HELPER.minTime * 0.9 ** perkLevel, HELPER.baseTime * HELPER.speedGrowth ** speedLevel * 0.9 ** perkLevel);
@@ -242,7 +285,7 @@ export const BULK = [
 // stage = 지금까지 환생한 횟수. 5번째 환생이 마지막이며 그 뒤로는 무한 모드.
 export const PRESTIGE = {
   maxStage: 5,
-  goals: [5_000_000_000, 100_000_000_000, 1_200_000_000_000, 10_000_000_000_000, 80_000_000_000_000],
+  goals: [600_000_000, 20_000_000_000, 400_000_000_000, 4_000_000_000_000, 40_000_000_000_000],
   baseClovers: 10,
 };
 export function prestigeGoal(stage) {
@@ -257,7 +300,7 @@ export const LIFE_NAMES = ['1회차: 알바생', '2회차: 재도전', '3회차:
 
 // 클로버로 사는 영구 강화
 export const PERKS = [
-  { id: 'job', name: '알바의 달인', desc: '탭 수입 +50%', max: 20, cost: (lv) => 2 + 2 * lv },
+  { id: 'job', name: '알바의 달인', desc: '계산 수입 +50%', max: 20, cost: (lv) => 2 + 2 * lv },
   { id: 'prize', name: '네잎 부적', desc: '당첨금 보너스 +5%', max: 20, cost: (lv) => 3 + 3 * lv },
   { id: 'seed', name: '비상금', desc: '환생 직후 시작 자금', max: 5, cost: (lv) => 4 + 4 * lv },
   { id: 'helper', name: '도우미 교육', desc: '도우미 속도 +10%', max: 10, cost: (lv) => 3 + 3 * lv },

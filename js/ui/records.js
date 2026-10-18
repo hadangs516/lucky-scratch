@@ -33,8 +33,9 @@ export class RecordsView {
       ['황금 복권', `${comma(st.golden)}장 (당첨 ${comma(st.goldenWins)})`],
       ['아깝다!', `${comma(st.near)}번`],
       ['최장 연속 꽝', `${comma(st.maxLoseStreak)}번`],
-      ['알바 탭', `${comma(st.taps)}번`],
-      ['최고 콤보', comma(st.maxCombo)],
+      ['계산한 바코드', `${comma(st.taps)}개`],
+      ['계산한 손님', `${comma(st.customers || 0)}명`],
+      ['최고 연속 계산', comma(st.maxCombo)],
       ['환생', `${comma(st.prestiges)}번`],
     ];
     this.body.innerHTML = `
